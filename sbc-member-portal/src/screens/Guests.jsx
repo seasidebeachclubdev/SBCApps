@@ -23,23 +23,14 @@ export default function Guests() {
   }
 
   async function checkGuestVisits(name, email, phone) {
-    // Cross-member 4-visit check per handoff spec
-    let query = supabase.from('guests').select('id', { count: 'exact' })
-    if (name) query = query.ilike('guest_name', name)
-    const { count: nameCount } = await query
-    if (nameCount >= 4) return true
-
-    if (email) {
-      const { count } = await supabase.from('guests').select('id', { count: 'exact' }).eq('email', email)
-      if (count >= 4) return true
-    }
-    if (phone) {
-      const digits = phone.replace(/\D/g, '')
-      const { data } = await supabase.from('guests').select('phone')
-      const count = (data || []).filter(g => g.phone?.replace(/\D/g, '') === digits).length
-      if (count >= 4) return true
-    }
-    return false
+    // Cross-member 4-visit check. RLS hides other members' guests from this
+    // client, so the count runs through a security-definer RPC instead of a
+    // direct query. Returns null when the check itself fails.
+    const { data: count, error } = await supabase.rpc('guest_visit_count', {
+      p_name: name, p_email: email || '', p_phone: phone || '',
+    })
+    if (error) return null
+    return count ?? 0
   }
 
   async function handleSubmit(e) {
@@ -47,14 +38,19 @@ export default function Guests() {
     setError('')
     setSaving(true)
 
-    const blocked = await checkGuestVisits(form.name, form.email, form.phone)
-    if (blocked) {
+    const visits = await checkGuestVisits(form.name, form.email, form.phone)
+    if (visits === null) {
+      setError('Could not verify guest visit count. Please try again.')
+      setSaving(false)
+      return
+    }
+    if (visits >= 4) {
       setError(`${form.name} has already used all 4 guest visits this season and cannot be invited again.`)
       setSaving(false)
       return
     }
 
-    const { error: insertError } = await supabase.from('guests').insert({
+    const { data: newGuest, error: insertError } = await supabase.from('guests').insert({
       member_id: member.member_id,
       member_name: `${member.first_name} ${member.last_name}`,
       guest_name: form.name,
@@ -64,7 +60,7 @@ export default function Guests() {
       fee: 35,
       paid: false,
       payment_method: 'cash',
-    })
+    }).select('id').single()
 
     if (insertError) {
       setError('Something went wrong. Please try again.')
@@ -72,6 +68,7 @@ export default function Guests() {
       // Trigger QR email via Supabase Edge Function
       await supabase.functions.invoke('send-guest-qr', {
         body: {
+          guest_id: newGuest.id,
           guest_name: form.name,
           guest_email: form.email,
           member_name: `${member.first_name} ${member.last_name}`,

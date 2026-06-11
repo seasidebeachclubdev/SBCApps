@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Login from './screens/Login'
+import ResetPassword from './screens/ResetPassword'
 import Schedule from './screens/Schedule'
 import Clock from './screens/Clock'
 import Swap from './screens/Swap'
@@ -45,6 +46,17 @@ function TopBar() {
   )
 }
 
+function NoAccount({ message }) {
+  const { signOut } = useAuth()
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 8, padding: 24, textAlign: 'center' }}>
+      <span style={{ fontSize: 14 }}>{message}</span>
+      <span style={{ fontSize: 12, color: '#6b6b6b' }}>Contact your manager if this is unexpected.</span>
+      <button onClick={signOut} style={{ marginTop: 10, padding: '10px 22px', border: 'none', borderRadius: 8, background: '#50a2ad', color: '#fff', fontSize: 14 }}>Sign Out</button>
+    </div>
+  )
+}
+
 function ProtectedLayout() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -62,8 +74,10 @@ function ProtectedLayout() {
 }
 
 export default function App() {
-  const { session, loading } = useAuth()
+  const { session, employee, loading, recovery } = useAuth()
   if (loading) return <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', height: '100vh' }}><span style={{ color: '#50a2ad' }}>Loading…</span></div>
+  if (recovery && session) return <ResetPassword />
   if (!session) return <Routes><Route path="*" element={<Login />} /></Routes>
+  if (!employee) return <NoAccount message="No staff account is linked to this login." />
   return <ProtectedLayout />
 }

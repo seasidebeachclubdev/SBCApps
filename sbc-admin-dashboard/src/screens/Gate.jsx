@@ -3,15 +3,14 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 
 // QR format: SBCRI|{guest_id}|{guest_name}|{visit_date}|{member_id}
-async function checkGuestVisits(guestId, guestName, email, phone) {
-  let count = 0
-  if (guestId) {
-    const { count: c } = await supabase.from('guests').select('id', { count: 'exact' }).eq('id', guestId)
-    // Count by name across all members
-  }
-  const { count: nameCount } = await supabase.from('guests').select('id', { count: 'exact' }).ilike('guest_name', guestName)
-  count = nameCount || 0
-  return count
+// Counts via the security-definer RPC so name/email/phone matching follows
+// the same rules as registration. Returns null when the check fails.
+async function checkGuestVisits(guestName) {
+  const { data: count, error } = await supabase.rpc('guest_visit_count', {
+    p_name: guestName, p_email: '', p_phone: '',
+  })
+  if (error) return null
+  return count ?? 0
 }
 
 export default function Gate() {
@@ -88,9 +87,15 @@ export default function Gate() {
     }
     const [, guestId, guestName, visitDate, memberId] = parts
 
-    // Check 4-visit rule
-    const visitCount = await checkGuestVisits(guestId, guestName, null, null)
-    if (visitCount >= 4) {
+    // Check 4-visit rule. The scanned pass already exists as a row, so a
+    // guest on their legitimate 4th visit counts 4 - block only beyond that.
+    const visitCount = await checkGuestVisits(guestName)
+    if (visitCount === null) {
+      setToast('Could not verify visit count - try again')
+      setTimeout(() => setToast(''), 3000)
+      return
+    }
+    if (visitCount > 4) {
       setBlocked(true)
       setBlockedName(guestName)
       return
@@ -117,7 +122,7 @@ export default function Gate() {
       })
     }
     setScanResult(null)
-    setToast('Check-in recorded — SMS sent to member')
+    setToast('Check-in recorded — member notified')
     fetchRecentCheckins()
     setTimeout(() => setToast(''), 3000)
   }

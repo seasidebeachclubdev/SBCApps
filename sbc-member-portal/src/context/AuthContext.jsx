@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [member, setMember] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [recovery, setRecovery] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -15,10 +16,15 @@ export function AuthProvider({ children }) {
       else setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
-      if (session) fetchMember(session.user.id)
-      else { setMember(null); setLoading(false) }
+      if (!session) { setMember(null); setLoading(false); return }
+      // fetch on sign-in only; token refreshes keep the already-loaded profile
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        setLoading(true)
+        fetchMember(session.user.id)
+      }
+      if (event === 'PASSWORD_RECOVERY') setRecovery(true)
     })
 
     return () => subscription.unsubscribe()
@@ -45,8 +51,20 @@ export function AuthProvider({ children }) {
     setMember(null)
   }
 
+  async function resetPassword(email) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin })
+    return error
+  }
+
+  async function updatePassword(password) {
+    const { error } = await supabase.auth.updateUser({ password })
+    return error
+  }
+
+  const clearRecovery = () => setRecovery(false)
+
   return (
-    <AuthContext.Provider value={{ session, member, loading, signIn, signOut, setMember }}>
+    <AuthContext.Provider value={{ session, member, loading, recovery, signIn, signOut, setMember, resetPassword, updatePassword, clearRecovery }}>
       {children}
     </AuthContext.Provider>
   )
