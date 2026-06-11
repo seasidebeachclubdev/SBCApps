@@ -187,7 +187,8 @@ button { cursor: pointer; font-family: inherit; }
 
 .top-bar {
   background: var(--teal);
-  padding: 10px 18px 14px;
+  /* safe-area inset keeps the bar clear of the iOS notch / Android cutout */
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 18px 14px;
   color: white;
   flex-shrink: 0;
 }
@@ -199,7 +200,8 @@ button { cursor: pointer; font-family: inherit; }
   border-top: 1px solid var(--border);
   display: flex;
   flex-shrink: 0;
-  padding: 6px 0 10px;
+  /* keep tappable area above the iOS home indicator */
+  padding: 6px 0 calc(10px + env(safe-area-inset-bottom, 0px));
 }
 .nav-item {
   flex: 1;

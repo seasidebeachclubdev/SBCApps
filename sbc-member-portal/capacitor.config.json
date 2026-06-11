@@ -1,0 +1,22 @@
+{
+  "appId": "com.sbcri.member",
+  "appName": "Seaside Beach Club",
+  "webDir": "dist",
+  "ios": {
+    "contentInset": "never"
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "launchAutoHide": true,
+      "backgroundColor": "#50a2ad"
+    },
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#50a2ad"
+    }
+  }
+}
