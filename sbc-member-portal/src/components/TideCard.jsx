@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react'
 
-// Tide data fetched from NOAA API for Weekapaug / Watch Hill station
-// Station ID: 8461490 (Watch Hill, RI) — closest to Weekapaug
+// Watch Hill, RI (NOAA station 8461490) is the closest tide station to
+// Weekapaug. Lat/lon are the beach itself for air + sea-surface weather.
 const NOAA_STATION = '8461490'
+const LAT = 41.3503
+const LON = -71.6495
+const W = 282, H = 52
 
-function makeFallbackPath(w, h) {
+const cToF = c => Math.round((c * 9) / 5 + 32)
+
+// Synthetic semidiurnal curve, used only if the NOAA call fails.
+function fallbackCurvePoints() {
   const pts = []
   for (let i = 0; i <= 48; i++) {
     const t = i * 0.5
-    const tide = 2.1 + 1.7 * Math.cos((2 * Math.PI * (t - 12.47)) / 12.44)
-    const x = (t / 24) * w
-    const y = h - (tide / 4.5) * h
-    pts.push(`${x.toFixed(1)},${y.toFixed(1)}`)
+    pts.push({ hour: t, v: 2.1 + 1.7 * Math.cos((2 * Math.PI * (t - 12.47)) / 12.44) })
   }
-  return pts.join(' ')
+  return pts
 }
 
 export default function TideCard() {
@@ -23,82 +26,122 @@ export default function TideCard() {
   const [nowY, setNowY] = useState(null)
   const [tidePath, setTidePath] = useState('')
 
-  const W = 282, H = 52
-
   useEffect(() => {
-    fetchData()
+    fetchTideLabels()
+    fetchTideCurve()
+    fetchWeather()
+    fetchWaterTemp()
   }, [])
 
-  async function fetchData() {
+  // Scale a set of {hour, v} points into the SVG box and place the "now" dot
+  // by interpolating the real curve at the current time.
+  function renderCurve(pts) {
+    const vs = pts.map(p => p.v)
+    const min = Math.min(...vs), max = Math.max(...vs)
+    const range = max - min || 1
+    const pad = 0.14 * H
+    const toX = hour => (hour / 24) * W
+    const toY = v => H - pad - ((v - min) / range) * (H - 2 * pad)
+
+    setTidePath(pts.map(p => `${toX(p.hour).toFixed(1)},${toY(p.v).toFixed(1)}`).join(' '))
+
+    const now = new Date()
+    const nowH = now.getHours() + now.getMinutes() / 60
+    let v = pts[pts.length - 1].v
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (nowH >= pts[i].hour && nowH <= pts[i + 1].hour) {
+        const f = (nowH - pts[i].hour) / (pts[i + 1].hour - pts[i].hour)
+        v = pts[i].v + f * (pts[i + 1].v - pts[i].v)
+        break
+      }
+    }
+    setNowX(toX(nowH).toFixed(1))
+    setNowY(toY(v).toFixed(1))
+  }
+
+  function todayStr() {
+    return new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  }
+
+  // Real tide curve from NOAA hourly water-level predictions.
+  async function fetchTideCurve() {
     try {
-      // NOAA Tides & Currents API
-      const today = new Date()
-      const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
       const res = await fetch(
         `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?` +
-        `begin_date=${dateStr}&end_date=${dateStr}&station=${NOAA_STATION}` +
+        `begin_date=${todayStr()}&end_date=${todayStr()}&station=${NOAA_STATION}` +
+        `&product=predictions&datum=MLLW&time_zone=lst_ldt&interval=h&units=english&application=sbc&format=json`
+      )
+      const json = await res.json()
+      if (!json.predictions?.length) throw new Error('no predictions')
+      const pts = json.predictions.map(p => {
+        const [hh, mm] = p.t.split(' ')[1].split(':').map(Number)
+        return { hour: hh + mm / 60, v: parseFloat(p.v) }
+      })
+      renderCurve(pts)
+    } catch {
+      renderCurve(fallbackCurvePoints())
+    }
+  }
+
+  // Real high/low times + heights from NOAA. Show the next three events so the
+  // card stays useful into the evening rather than listing the morning's tides.
+  async function fetchTideLabels() {
+    try {
+      const res = await fetch(
+        `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?` +
+        `begin_date=${todayStr()}&end_date=${todayStr()}&station=${NOAA_STATION}` +
         `&product=predictions&datum=MLLW&time_zone=lst_ldt&interval=hilo&units=english&application=sbc&format=json`
       )
       const json = await res.json()
-      if (json.predictions) {
-        const parsed = json.predictions.map(p => ({
+      if (!json.predictions?.length) throw new Error('no predictions')
+      const now = new Date()
+      const events = json.predictions.map(p => {
+        const [hh, mm] = p.t.split(' ')[1].split(':').map(Number)
+        const dt = new Date(now); dt.setHours(hh, mm, 0, 0)
+        return {
           label: p.type === 'H' ? 'High' : 'Low',
-          time: p.t.split(' ')[1],
+          time: dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
           ft: parseFloat(p.v).toFixed(1),
-          hour: parseInt(p.t.split(' ')[1].split(':')[0]),
-        }))
-        setTides(parsed.slice(0, 3))
-
-        // Build tide curve
-        const pts = []
-        const nowH = today.getHours() + today.getMinutes() / 60
-        let nX = (nowH / 24) * W
-        let nY = H / 2
-        for (let i = 0; i <= 96; i++) {
-          const t = i * 0.25
-          const tide = 2.1 + 1.7 * Math.cos((2 * Math.PI * (t - 12.47)) / 12.44)
-          const x = (t / 24) * W
-          const y = H - (tide / 4.5) * H
-          pts.push(`${x.toFixed(1)},${y.toFixed(1)}`)
-          if (Math.abs(t - nowH) < 0.13) { nX = x; nY = y }
+          past: dt < now,
         }
-        setTidePath(pts.join(' '))
-        setNowX(nX.toFixed(1))
-        setNowY(nY.toFixed(1))
-      }
+      })
+      const upcoming = events.filter(e => !e.past)
+      const shown = upcoming.length >= 3 ? upcoming.slice(0, 3) : events.slice(-3)
+      setTides(shown.map(({ label, time, ft }) => ({ label, time, ft })))
     } catch {
-      // Fallback to cosine approximation
-      const nowH = new Date().getHours() + new Date().getMinutes() / 60
-      const nX = (nowH / 24) * W
-      const nowTide = 2.1 + 1.7 * Math.cos((2 * Math.PI * (nowH - 12.47)) / 12.44)
-      const nY = H - (nowTide / 4.5) * H
-      setTidePath(makeFallbackPath(W, H))
-      setNowX(nX.toFixed(1))
-      setNowY(nY.toFixed(1))
-      setTides([
-        { label: 'Low',  time: '6:15 AM',  ft: '0.4' },
-        { label: 'High', time: '12:28 PM', ft: '3.8' },
-        { label: 'Low',  time: '6:41 PM',  ft: '0.2' },
-      ])
+      setTides([])
     }
+  }
 
-    // Open-Meteo for air temp + wind (free, no key needed)
+  // Air temp, wind, sky from Open-Meteo (free, no key).
+  async function fetchWeather() {
     try {
       const res = await fetch(
-        'https://api.open-meteo.com/v1/forecast?latitude=41.3503&longitude=-71.6495' +
-        '&current=temperature_2m,wind_speed_10m,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph'
+        `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}` +
+        `&current=temperature_2m,wind_speed_10m,weather_code&temperature_unit=fahrenheit&wind_speed_unit=mph`
       )
       const json = await res.json()
       const cur = json.current
-      const code = cur.weather_code
-      const sky = code === 0 ? 'Clear' : code <= 3 ? 'Partly cloudy' : code <= 48 ? 'Foggy' : code <= 67 ? 'Rainy' : 'Cloudy'
-      setWeather({
-        air: `${Math.round(cur.temperature_2m)}°`,
-        wind: `${Math.round(cur.wind_speed_10m)}`,
-        sky,
-      })
+      const c = cur.weather_code
+      const sky = c === 0 ? 'Clear' : c <= 3 ? 'Partly cloudy' : c <= 48 ? 'Foggy'
+        : c <= 67 ? 'Rainy' : c <= 77 ? 'Snow' : c <= 82 ? 'Showers' : 'Stormy'
+      setWeather(w => ({ ...w, air: `${Math.round(cur.temperature_2m)}°`, wind: `${Math.round(cur.wind_speed_10m)}`, sky }))
     } catch {
-      setWeather({ air: '—', water: '—', wind: '—', sky: '' })
+      // leave dashes
+    }
+  }
+
+  // Live sea-surface temperature from Open-Meteo's marine API (Celsius -> F).
+  async function fetchWaterTemp() {
+    try {
+      const res = await fetch(
+        `https://marine-api.open-meteo.com/v1/marine?latitude=${LAT}&longitude=${LON}&current=sea_surface_temperature`
+      )
+      const json = await res.json()
+      const c = json?.current?.sea_surface_temperature
+      if (typeof c === 'number') setWeather(w => ({ ...w, water: `${cToF(c)}°` }))
+    } catch {
+      // leave dash
     }
   }
 
@@ -120,7 +163,7 @@ export default function TideCard() {
         </div>
         <div style={{ textAlign: 'center', borderLeft: '1px solid #e0e0e0', borderRight: '1px solid #e0e0e0' }}>
           <div style={{ fontSize: 10, color: '#6b6b6b' }}>Water</div>
-          <div style={{ fontSize: 20, fontWeight: 600, color: '#50a2ad' }}>{weather.water || '69°'}</div>
+          <div style={{ fontSize: 20, fontWeight: 600, color: '#50a2ad' }}>{weather.water}</div>
           <div style={{ fontSize: 10, color: '#6b6b6b' }}>Atlantic</div>
         </div>
         <div style={{ textAlign: 'center' }}>
@@ -132,7 +175,7 @@ export default function TideCard() {
       <div style={{ fontSize: 10, fontWeight: 600, color: '#6b6b6b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
         Tides today
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{ display: 'block' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{ display: 'block', width: '100%' }}>
         {tidePath && (
           <polyline points={tidePath} fill="none" stroke="#50a2ad" strokeWidth="1.5" strokeLinejoin="round" />
         )}
