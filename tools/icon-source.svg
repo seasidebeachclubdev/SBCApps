@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#50a2ad"/>
+  <!-- sun -->
+  <circle cx="256" cy="150" r="42" fill="#ffd24a"/>
+  <!-- waves -->
+  <path d="M0 360 q64 -34 128 0 t128 0 t128 0 t128 0 v152 H0 Z" fill="#3d8893"/>
+  <path d="M0 410 q64 -34 128 0 t128 0 t128 0 t128 0 v102 H0 Z" fill="#2f6e78"/>
+  <!-- SBC monogram -->
+  <text x="256" y="290" font-family="Helvetica, Arial, sans-serif" font-size="120" font-weight="700" fill="#ffffff" text-anchor="middle">SBC</text>
+</svg>
