@@ -22,6 +22,18 @@ allprojects {
         google()
         mavenCentral()
     }
+
+    // Kotlin 1.8 merged the jdk7/jdk8 stdlib artifacts into the main stdlib.
+    // cordova-android pulls the old 1.6.21 jdk7/jdk8 jars, which collide with
+    // Capacitor's kotlin-stdlib 1.8.22. Force them all to 1.8.22 so the legacy
+    // artifacts resolve to empty redirect stubs and the duplicate classes vanish.
+    configurations.all {
+        resolutionStrategy {
+            force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+        }
+    }
 }
 
 task clean(type: Delete) {
