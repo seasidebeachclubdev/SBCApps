@@ -100,17 +100,23 @@ export async function sendSms(to: string, body: string) {
   const sid = Deno.env.get('TWILIO_ACCOUNT_SID')
   const tok = Deno.env.get('TWILIO_AUTH_TOKEN')
   const from = Deno.env.get('TWILIO_PHONE_NUMBER')
-  if (!sid || !tok || !from) {
+  const msgSvc = Deno.env.get('TWILIO_MESSAGING_SERVICE_SID')
+  if (!sid || !tok || (!from && !msgSvc)) {
     console.log(`[sms skipped - Twilio not configured] to=${to}`)
     return { skipped: true }
   }
+  // A2P 10DLC: prefer the Messaging Service (it selects the sender and applies
+  // the registered campaign); fall back to a direct From number if no MG SID.
+  const params: Record<string, string> = { To: to, Body: body }
+  if (msgSvc) params.MessagingServiceSid = msgSvc
+  else params.From = from!
   const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
     method: 'POST',
     headers: {
       Authorization: 'Basic ' + btoa(`${sid}:${tok}`),
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: new URLSearchParams({ To: to, From: from, Body: body }),
+    body: new URLSearchParams(params),
   })
   const resBody = await res.json().catch(() => null)
   if (!res.ok) console.error('twilio error', res.status, JSON.stringify(resBody))
