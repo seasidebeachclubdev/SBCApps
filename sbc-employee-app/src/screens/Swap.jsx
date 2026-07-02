@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { localDateStr } from '../lib/dates'
 
 const DROP_REASONS = ['Personal / family', 'Illness', 'Schedule conflict', 'Other']
 
@@ -17,10 +18,12 @@ export default function Swap() {
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localDateStr()
+    // exclude the employee's own dropped shifts - you can't claim your own
     const { data: open } = await supabase
       .from('shifts').select('*, employees(name, area)')
-      .eq('status', 'dropped').gte('shift_date', today).order('shift_date')
+      .eq('status', 'dropped').neq('employee_id', employee.id)
+      .gte('shift_date', today).order('shift_date')
     setOpenShifts(open || [])
 
     const { data: mine } = await supabase
@@ -32,9 +35,10 @@ export default function Swap() {
   }
 
   async function claimShift(shift) {
+    if (shift.employee_id === employee.id) return
     setSaving(true)
-    await supabase.from('shifts').update({ status: 'picked_up', picked_up_by: employee.id, approved: false }).eq('id', shift.id)
-    setToast('Shift claimed — awaiting manager approval')
+    const { error } = await supabase.from('shifts').update({ status: 'picked_up', picked_up_by: employee.id, approved: false }).eq('id', shift.id)
+    setToast(error ? 'Could not claim shift — try again' : 'Shift claimed — awaiting manager approval')
     fetchData()
     setTimeout(() => setToast(''), 3000)
     setSaving(false)
@@ -103,7 +107,7 @@ export default function Swap() {
           ) : (
             <div className="list-card">
               {myShifts.map(s => {
-                const isToday = s.shift_date === new Date().toISOString().slice(0, 10)
+                const isToday = s.shift_date === localDateStr()
                 return (
                   <div key={s.id} className="list-item">
                     <div style={{ flex: 1 }}>

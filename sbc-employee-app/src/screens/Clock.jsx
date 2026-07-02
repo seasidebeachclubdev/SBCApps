@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { localDateStr } from '../lib/dates'
 
 export default function Clock() {
   const { employee } = useAuth()
@@ -9,7 +10,7 @@ export default function Clock() {
   const [toast, setToast] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayStr = localDateStr()
 
   useEffect(() => { fetchRecord() }, [])
 
@@ -19,36 +20,49 @@ export default function Clock() {
       .select('*')
       .eq('employee_id', employee.id)
       .eq('shift_date', todayStr)
-      .single()
+      .maybeSingle()
     setRecord(data || null)
   }
 
   async function clockIn() {
+    if (record?.clock_in) return
     setLoading(true)
     const now = new Date().toISOString()
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('clock_records')
-      .upsert({ employee_id: employee.id, shift_date: todayStr, clock_in: now })
+      .upsert(
+        { employee_id: employee.id, shift_date: todayStr, clock_in: now },
+        { onConflict: 'employee_id,shift_date' },
+      )
       .select()
       .single()
-    setRecord(data)
-    setToast(`Clocked in at ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`)
+    if (error || !data) {
+      setToast('Could not clock in — try again')
+    } else {
+      setRecord(data)
+      setToast(`Clocked in at ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`)
+    }
     setTimeout(() => setToast(''), 3000)
     setLoading(false)
   }
 
   async function clockOut() {
+    if (!record?.clock_in || record?.clock_out) return
     setLoading(true)
     const now = new Date().toISOString()
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('clock_records')
       .update({ clock_out: now })
       .eq('id', record.id)
       .select()
       .single()
-    setRecord(data)
-    const hrs = ((new Date(now) - new Date(record.clock_in)) / 3600000).toFixed(1)
-    setToast(`Clocked out — ${hrs} hrs logged`)
+    if (error || !data) {
+      setToast('Could not clock out — try again')
+    } else {
+      setRecord(data)
+      const hrs = ((new Date(now) - new Date(record.clock_in)) / 3600000).toFixed(1)
+      setToast(`Clocked out — ${hrs} hrs logged`)
+    }
     setTimeout(() => setToast(''), 3000)
     setLoading(false)
   }

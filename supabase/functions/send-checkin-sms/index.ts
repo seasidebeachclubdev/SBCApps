@@ -4,7 +4,7 @@
 import {
   corsHeaders, json, adminClient,
   getCallerEmployee,
-  sendSms, sendEmail, emailShell,
+  sendSms, sendEmail, emailShell, esc,
 } from '../_shared/helpers.ts'
 
 Deno.serve(async (req) => {
@@ -35,8 +35,8 @@ Deno.serve(async (req) => {
       to: member.email,
       subject: `Your guest ${body.guest_name} has arrived`,
       html: emailShell('Guest Check-In', `
-        <p>Hi ${member.first_name ?? 'there'},</p>
-        <p><strong>${body.guest_name}</strong> just checked in at the gate as your guest.</p>
+        <p>Hi ${esc(member.first_name ?? 'there')},</p>
+        <p><strong>${esc(body.guest_name)}</strong> just checked in at the gate as your guest.</p>
         <p style="font-size:12px;color:#6b6b6b">Guest fees are $35 per visit, payable to a gate attendant by cash or check.</p>
       `),
     })

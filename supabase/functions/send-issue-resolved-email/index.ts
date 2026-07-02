@@ -1,9 +1,9 @@
 // Emails the reporting member when their issue is marked Resolved.
-// Caller must be an employee.
+// Caller must be a manager - the Issues tab is manager-only in the admin app.
 import {
   corsHeaders, json, adminClient,
   getCallerEmployee,
-  sendEmail, emailShell,
+  sendEmail, emailShell, esc,
 } from '../_shared/helpers.ts'
 
 Deno.serve(async (req) => {
@@ -14,6 +14,7 @@ Deno.serve(async (req) => {
 
   const employee = await getCallerEmployee(req)
   if (!employee) return json({ error: 'unauthorized' }, 401)
+  if (!['ops_manager', 'business_manager'].includes(employee.role)) return json({ error: 'forbidden' }, 403)
 
   const db = adminClient()
   const { data: issue } = await db
@@ -34,11 +35,11 @@ Deno.serve(async (req) => {
     to: member.email,
     subject: `Your reported issue has been resolved`,
     html: emailShell('Issue Resolved', `
-      <p>Hi ${member.first_name ?? 'there'},</p>
+      <p>Hi ${esc(member.first_name ?? 'there')},</p>
       <p>The issue you reported has been marked <strong>Resolved</strong>:</p>
       <table style="font-size:14px;line-height:1.8">
-        <tr><td style="color:#6b6b6b;padding-right:14px">Category</td><td>${issue.category}</td></tr>
-        <tr><td style="color:#6b6b6b;padding-right:14px">Subject</td><td><strong>${issue.subject}</strong></td></tr>
+        <tr><td style="color:#6b6b6b;padding-right:14px">Category</td><td>${esc(issue.category)}</td></tr>
+        <tr><td style="color:#6b6b6b;padding-right:14px">Subject</td><td><strong>${esc(issue.subject)}</strong></td></tr>
       </table>
       <p>Thank you for helping keep the club in shape. If the problem comes back, submit a new report from the Issues tab.</p>
     `),

@@ -10,6 +10,7 @@ export default function Onboarding() {
   const [email, setEmail] = useState(member?.email || '')
   const [vehicles, setVehicles] = useState([{ make: '', model: '', color: '', plate: '' }])
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   const maxVehicles = member?.two_stickers ? 2 : 1
 
@@ -26,18 +27,22 @@ export default function Onboarding() {
 
   async function complete() {
     setSaving(true)
+    setError('')
+
     // Save household members
+    const fullName = `${member.first_name ?? ''} ${member.last_name ?? ''}`.trim().toLowerCase()
     const householdRows = household.filter(n => n.trim()).map(name => ({
       member_id: member.member_id,
       full_name: name.trim(),
-      verified: name.trim().toLowerCase() === `${member.first_name} ${member.last_name}`.toLowerCase(),
+      verified: name.trim().toLowerCase() === fullName,
     }))
+    const writes = []
     if (householdRows.length) {
-      await supabase.from('household_members').insert(householdRows)
+      writes.push(supabase.from('household_members').insert(householdRows))
     }
 
     // Save contact info
-    await supabase.from('members').update({ phone, email }).eq('id', member.id)
+    writes.push(supabase.from('members').update({ phone, email }).eq('id', member.id))
 
     // Save vehicles
     const vehicleRows = vehicles.filter(v => v.make.trim()).map(v => ({
@@ -45,20 +50,32 @@ export default function Onboarding() {
       ...v,
     }))
     if (vehicleRows.length) {
-      await supabase.from('vehicles').insert(vehicleRows)
+      writes.push(supabase.from('vehicles').insert(vehicleRows))
+    }
+
+    const results = await Promise.all(writes)
+    if (results.some(r => r.error)) {
+      setError('Something went wrong saving your info. Please try again.')
+      setSaving(false)
+      return
     }
 
     // Mark onboarded
-    const { data } = await supabase
+    const { data, error: doneError } = await supabase
       .from('members')
       .update({ onboarded: true })
       .eq('id', member.id)
       .select()
       .single()
+    if (doneError || !data) {
+      setError('Something went wrong. Please try again.')
+      setSaving(false)
+      return
+    }
 
-    // Notify ops managers via Supabase Edge Function
+    // Notify ops managers via Supabase Edge Function (name comes from the roster)
     await supabase.functions.invoke('notify-onboarding', {
-      body: { member_id: member.member_id, name: `${member.first_name} ${member.last_name}` }
+      body: { member_id: member.member_id }
     })
 
     setMember(data)
@@ -154,6 +171,7 @@ export default function Onboarding() {
                 + Add second vehicle
               </button>
             )}
+            {error && <div className="error-text" style={{ marginBottom: 10 }}>{error}</div>}
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setStep(2)}>Back</button>
               <button className="btn-primary" style={{ flex: 2 }} onClick={complete} disabled={saving}>

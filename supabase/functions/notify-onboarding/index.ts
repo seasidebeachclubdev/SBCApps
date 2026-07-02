@@ -3,7 +3,7 @@
 import {
   corsHeaders, json, adminClient,
   getCallerMember, getCallerEmployee,
-  sendEmail, emailShell,
+  sendEmail, emailShell, esc,
 } from '../_shared/helpers.ts'
 
 Deno.serve(async (req) => {
@@ -17,7 +17,18 @@ Deno.serve(async (req) => {
   if (!member && !employee) return json({ error: 'unauthorized' }, 401)
   if (member && member.member_id !== body.member_id) return json({ error: 'forbidden' }, 403)
 
-  const { data: managers } = await adminClient()
+  const db = adminClient()
+
+  // Use the roster name, not a client-supplied one
+  const { data: target } = await db
+    .from('members')
+    .select('first_name, last_name, member_id')
+    .eq('member_id', body.member_id)
+    .maybeSingle()
+  if (!target) return json({ error: 'member not found' }, 404)
+  const displayName = [target.first_name, target.last_name].filter(Boolean).join(' ') || target.member_id
+
+  const { data: managers } = await db
     .from('employees')
     .select('email')
     .eq('role', 'ops_manager')
@@ -27,9 +38,9 @@ Deno.serve(async (req) => {
 
   const result = await sendEmail({
     to: emails,
-    subject: `Member onboarding completed - ${body.name ?? body.member_id}`,
+    subject: `Member onboarding completed - ${displayName}`,
     html: emailShell('Onboarding Completed', `
-      <p><strong>${body.name ?? 'A member'}</strong> (${body.member_id}) just completed account onboarding in the member portal.</p>
+      <p><strong>${esc(displayName)}</strong> (${esc(target.member_id)}) just completed account onboarding in the member portal.</p>
       <p>Household names, contact info, and vehicles are now on file. Household members are pending verification on the Members tab.</p>
     `),
   })

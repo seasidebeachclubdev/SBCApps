@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { localDateStr } from '../lib/dates'
 
 // QR format: SBCRI|{guest_id}|{guest_name}|{visit_date}|{member_id}
 // Counts via the security-definer RPC so name/email/phone matching follows
 // the same rules as registration. Returns null when the check fails.
-async function checkGuestVisits(guestName) {
+async function checkGuestVisits(guestName, email, phone) {
   const { data: count, error } = await supabase.rpc('guest_visit_count', {
-    p_name: guestName, p_email: '', p_phone: '',
+    p_name: guestName, p_email: email || '', p_phone: phone || '',
   })
   if (error) return null
   return count ?? 0
@@ -25,7 +26,7 @@ export default function Gate() {
   const [scannerActive, setScannerActive] = useState(false)
   const scannerRef = useRef(null)
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateStr()
 
   useEffect(() => {
     fetchRecentCheckins()
@@ -85,11 +86,25 @@ export default function Gate() {
       setTimeout(() => setToast(''), 3000)
       return
     }
-    const [, guestId, guestName, visitDate, memberId] = parts
+    const [, guestId] = parts
 
-    // Check 4-visit rule. The scanned pass already exists as a row, so a
-    // guest on their legitimate 4th visit counts 4 - block only beyond that.
-    const visitCount = await checkGuestVisits(guestName)
+    // The pass must exist as a registered guest row - everything else on the
+    // QR is display text and can be forged. Identity comes from the database.
+    const { data: guest } = await supabase
+      .from('guests')
+      .select('id, guest_name, email, phone, visit_date, member_id')
+      .eq('id', guestId)
+      .maybeSingle()
+    if (!guest) {
+      setToast('Pass not found - verify the guest at the desk')
+      setTimeout(() => setToast(''), 4000)
+      return
+    }
+
+    // Check 4-visit rule using the registered identity (name + email + phone).
+    // The scanned pass already exists as a row, so a guest on their legitimate
+    // 4th visit counts 4 - block only beyond that.
+    const visitCount = await checkGuestVisits(guest.guest_name, guest.email, guest.phone)
     if (visitCount === null) {
       setToast('Could not verify visit count - try again')
       setTimeout(() => setToast(''), 3000)
@@ -97,11 +112,18 @@ export default function Gate() {
     }
     if (visitCount > 4) {
       setBlocked(true)
-      setBlockedName(guestName)
+      setBlockedName(guest.guest_name)
       return
     }
 
-    setScanResult({ type: 'guest', guestId, guestName, visitDate, memberId, visitCount })
+    setScanResult({
+      type: 'guest',
+      guestId: guest.id,
+      guestName: guest.guest_name,
+      visitDate: guest.visit_date,
+      memberId: guest.member_id,
+      visitCount,
+    })
   }
 
   async function selectMember(member) {
@@ -113,10 +135,16 @@ export default function Gate() {
   async function admitGuest() {
     if (!scanResult) return
     if (scanResult.type === 'guest') {
-      await supabase.from('guests')
-        .update({ checked_in_by: admin.name })
+      // record the actual visit day so today's stats and check-in lists match
+      const { error } = await supabase.from('guests')
+        .update({ checked_in_by: admin.name, visit_date: today })
         .eq('id', scanResult.guestId)
-      // Trigger SMS to member via Edge Function
+      if (error) {
+        setToast('Check-in failed — try again')
+        setTimeout(() => setToast(''), 3000)
+        return
+      }
+      // Notify the member via Edge Function (SMS with email fallback)
       await supabase.functions.invoke('send-checkin-sms', {
         body: { guest_name: scanResult.guestName, member_id: scanResult.memberId }
       })

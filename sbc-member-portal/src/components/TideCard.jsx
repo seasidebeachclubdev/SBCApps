@@ -60,7 +60,9 @@ export default function TideCard() {
   }
 
   function todayStr() {
-    return new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    // local date - toISOString() is UTC and rolls to tomorrow after ~8pm ET
+    const d = new Date()
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
   }
 
   // Real tide curve from NOAA hourly water-level predictions.

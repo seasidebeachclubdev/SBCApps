@@ -14,9 +14,14 @@ export default function Issues() {
   }
 
   async function resolveIssue(id) {
-    await supabase.from('issues').update({ status: 'Resolved', resolved_at: new Date().toISOString() }).eq('id', id)
-    await supabase.functions.invoke('send-issue-resolved-email', { body: { issue_id: id } })
-    setToast('Issue resolved — member notified')
+    const { error } = await supabase.from('issues').update({ status: 'Resolved', resolved_at: new Date().toISOString() }).eq('id', id)
+    if (error) {
+      setToast('Could not resolve issue — try again')
+      setTimeout(() => setToast(''), 3000)
+      return
+    }
+    const { error: mailError } = await supabase.functions.invoke('send-issue-resolved-email', { body: { issue_id: id } })
+    setToast(mailError ? 'Issue resolved — email notification failed' : 'Issue resolved — member notified')
     fetchIssues()
     setTimeout(() => setToast(''), 3000)
   }

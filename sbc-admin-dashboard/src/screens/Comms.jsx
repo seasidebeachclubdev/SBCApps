@@ -16,15 +16,21 @@ export default function Comms() {
   async function sendMessage(e) {
     e.preventDefault()
     setSending(true)
-    await supabase.functions.invoke('send-member-email', {
+    const { data, error } = await supabase.functions.invoke('send-member-email', {
       body: { recipients: form.recipients, subject: form.subject, message: form.message, sent_by: admin.name }
     })
+    if (error || data?.ok === false) {
+      setToast(data?.failed ? `Sent ${data.sent}, failed ${data.failed} — try again` : 'Send failed — try again')
+      setTimeout(() => setToast(''), 5000)
+      setSending(false)
+      return
+    }
     // Also save as notice if it's a broadcast
     if (form.recipients === 'all') {
       await supabase.from('notices').insert({ text: form.message, posted_by: admin.id, active: true })
     }
     setForm({ recipients: 'all', subject: '', message: '' })
-    setToast('Message sent to members')
+    setToast(`Message sent to ${data?.sent ?? 0} members`)
     setTimeout(() => setToast(''), 3000)
     setSending(false)
   }

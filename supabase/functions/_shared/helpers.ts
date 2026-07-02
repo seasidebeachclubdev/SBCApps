@@ -12,6 +12,12 @@ export function json(body: unknown, status = 200) {
   })
 }
 
+// Escape user-supplied text before interpolating into email HTML.
+export function esc(v: unknown) {
+  return String(v ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
+}
+
 export function adminClient() {
   return createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -83,7 +89,10 @@ export async function sendEmailBatch(messages: { to: string; subject: string; ht
     return { skipped: true, count: 0 }
   }
   let sent = 0
+  let failed = 0
   for (let i = 0; i < messages.length; i += 100) {
+    // Resend allows 2 requests/second - space out consecutive batch calls
+    if (i > 0) await new Promise((r) => setTimeout(r, 600))
     const chunk = messages.slice(i, i + 100).map(m => ({ from: FROM(), ...m }))
     const res = await fetch('https://api.resend.com/emails/batch', {
       method: 'POST',
@@ -91,9 +100,12 @@ export async function sendEmailBatch(messages: { to: string; subject: string; ht
       body: JSON.stringify(chunk),
     })
     if (res.ok) sent += chunk.length
-    else console.error('resend batch error', res.status, await res.text())
+    else {
+      failed += chunk.length
+      console.error('resend batch error', res.status, await res.text())
+    }
   }
-  return { ok: true, count: sent }
+  return { ok: failed === 0, count: sent, failed }
 }
 
 export async function sendSms(to: string, body: string) {
@@ -128,7 +140,7 @@ export function emailShell(title: string, inner: string) {
   <div style="max-width:520px;margin:0 auto;padding:24px 16px">
     <div style="background:#50a2ad;color:#fff;border-radius:12px 12px 0 0;padding:18px 22px">
       <div style="font-size:12px;opacity:.85">Seaside Beach Club</div>
-      <div style="font-size:19px;font-weight:600">${title}</div>
+      <div style="font-size:19px;font-weight:600">${esc(title)}</div>
     </div>
     <div style="background:#fff;border-radius:0 0 12px 12px;padding:22px;font-size:14px;line-height:1.6;color:#1a1a1a">
       ${inner}

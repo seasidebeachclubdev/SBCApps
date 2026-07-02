@@ -3,7 +3,7 @@
 import {
   corsHeaders, json, adminClient,
   getCallerEmployee,
-  sendEmailBatch, emailShell,
+  sendEmailBatch, emailShell, esc,
 } from '../_shared/helpers.ts'
 
 Deno.serve(async (req) => {
@@ -32,13 +32,18 @@ Deno.serve(async (req) => {
   if (members.length === 0) return json({ ok: true, sent: 0 })
 
   const html = emailShell(body.subject, `
-    <div style="white-space:pre-wrap">${body.message}</div>
-    ${body.sent_by ? `<p style="font-size:12px;color:#6b6b6b;margin-top:18px">- ${body.sent_by}, Seaside Beach Club</p>` : ''}
+    <div style="white-space:pre-wrap">${esc(body.message)}</div>
+    ${body.sent_by ? `<p style="font-size:12px;color:#6b6b6b;margin-top:18px">- ${esc(body.sent_by)}, Seaside Beach Club</p>` : ''}
   `)
 
   const result = await sendEmailBatch(
     members.map(m => ({ to: m.email, subject: body.subject, html })),
   )
 
-  return json({ ok: true, sent: result.count ?? 0, skipped: result.skipped ?? false })
+  return json({
+    ok: result.ok !== false,
+    sent: result.count ?? 0,
+    failed: result.failed ?? 0,
+    skipped: result.skipped ?? false,
+  })
 })

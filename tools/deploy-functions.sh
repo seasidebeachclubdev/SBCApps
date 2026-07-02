@@ -5,6 +5,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# nvm-managed node; fall back to whatever is on PATH
+[ -s "$HOME/.nvm/nvm.sh" ] && source "$HOME/.nvm/nvm.sh"
+
+# token from env or tools/.env
+if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ] && [ -f tools/.env ]; then
+  SUPABASE_ACCESS_TOKEN=$(grep '^SUPABASE_ACCESS_TOKEN=' tools/.env | cut -d= -f2)
+  export SUPABASE_ACCESS_TOKEN
+fi
 if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
   echo "SUPABASE_ACCESS_TOKEN is not set" >&2
   exit 1

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { localDateStr } from '../lib/dates'
 
 const FLAGS = {
   green:  { color: '#2e9e55', bg: '#eaf7ee', border: '#8dd4a8', text: '#1a5c33', label: 'Green',  desc: 'Safe conditions' },
@@ -24,7 +25,7 @@ export default function Overview() {
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localDateStr()
 
     // Stats
     const { count: checkedIn } = await supabase.from('guests').select('id', { count: 'exact' }).eq('visit_date', today).not('checked_in_by', 'is', null)

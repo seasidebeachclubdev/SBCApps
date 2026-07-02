@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { localDateStr } from '../lib/dates'
+
+// Quote a CSV field when it contains commas, quotes, or newlines.
+const csvField = v => {
+  const s = String(v ?? '')
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
 
 export default function Payroll() {
   const [employees, setEmployees] = useState([])
@@ -13,7 +20,9 @@ export default function Payroll() {
     since.setDate(since.getDate() - 14)
     const { data } = await supabase
       .from('employees').select('id, name, area, clock_records(clock_in, clock_out, shift_date)')
-      .eq('active', true).order('name')
+      .eq('active', true)
+      .gte('clock_records.shift_date', localDateStr(since))
+      .order('name')
     setEmployees((data || []).map(emp => {
       const hrs = (emp.clock_records || []).reduce((a, r) => {
         if (!r.clock_in || !r.clock_out) return a
@@ -25,11 +34,11 @@ export default function Payroll() {
 
   function exportCSV() {
     const rows = [['Name', 'Area', 'Hours', 'Gross Pay'], ...employees.map(e => [e.name, e.area, e.hours, (e.hours * HOURLY_RATE).toFixed(2)])]
-    const csv = rows.map(r => r.join(',')).join('\n')
+    const csv = rows.map(r => r.map(csvField).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    a.href = url; a.download = `SBC_Payroll_${new Date().toISOString().slice(0, 10)}.csv`; a.click()
+    a.href = url; a.download = `SBC_Payroll_${localDateStr()}.csv`; a.click()
     setToast('CSV exported — ready for QuickBooks')
     setTimeout(() => setToast(''), 3000)
   }

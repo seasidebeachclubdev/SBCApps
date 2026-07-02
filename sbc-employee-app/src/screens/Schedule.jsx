@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { localDateStr } from '../lib/dates'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -20,31 +21,29 @@ export default function Schedule() {
     const sunday = new Date(monday)
     sunday.setDate(monday.getDate() + 6)
 
-    const fmt = d => d.toISOString().slice(0, 10)
-
     const { data } = await supabase
       .from('shifts')
       .select('*')
       .eq('employee_id', employee.id)
-      .gte('shift_date', fmt(monday))
-      .lte('shift_date', fmt(sunday))
+      .gte('shift_date', localDateStr(monday))
+      .lte('shift_date', localDateStr(sunday))
       .order('shift_date')
 
     setShifts(data || [])
 
     // Fetch kitchen/labor assignment for today
-    const todayStr = fmt(today)
+    const todayStr = localDateStr(today)
     if (employee.area === 'Kitchen' || employee.area === 'Snack Bar') {
-      const { data: ka } = await supabase.from('kitchen_assignments').select('station').eq('employee_id', employee.id).eq('shift_date', todayStr).single()
+      const { data: ka } = await supabase.from('kitchen_assignments').select('station').eq('employee_id', employee.id).eq('shift_date', todayStr).maybeSingle()
       if (ka) setAssignment({ type: 'kitchen', value: ka.station })
     } else if (employee.area === 'Labor') {
-      const { data: la } = await supabase.from('labor_assignments').select('duty, slot').eq('employee_id', employee.id).eq('shift_date', todayStr).single()
+      const { data: la } = await supabase.from('labor_assignments').select('duty, slot').eq('employee_id', employee.id).eq('shift_date', todayStr).maybeSingle()
       if (la) setAssignment({ type: 'labor', duty: la.duty, slot: la.slot })
     }
   }
 
   const today = new Date()
-  const todayStr = today.toISOString().slice(0, 10)
+  const todayStr = localDateStr(today)
 
   // Build week grid
   const dayOfWeek = today.getDay()
@@ -54,7 +53,7 @@ export default function Schedule() {
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
-    return { date: d.toISOString().slice(0, 10), dayLabel: DAY_LABELS[(monday.getDay() + i) % 7], initial: DAY_INITIALS[(monday.getDay() + i) % 7] }
+    return { date: localDateStr(d), dayLabel: DAY_LABELS[(monday.getDay() + i) % 7], initial: DAY_INITIALS[(monday.getDay() + i) % 7] }
   })
 
   return (
