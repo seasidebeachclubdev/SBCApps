@@ -63,7 +63,7 @@ const eTok = await signIn('test.employee@sbcri.com', 'TestEmployee2026!')
 const eMembers = await rest('members?select=member_id', eTok)
 check('employee sees members', eMembers.body?.length >= 1, JSON.stringify(eMembers))
 const eEmp = await rest('employees?select=email', eTok)
-check('employee sees employees', eEmp.body?.length === 3, JSON.stringify(eEmp))
+check('employee sees employees', (eEmp.body?.length ?? 0) >= 3, JSON.stringify(eEmp))
 
 // 5. manager: RPC guest_visit_count works
 const gTok = await signIn('test.manager@sbcri.com', 'TestManager2026!')

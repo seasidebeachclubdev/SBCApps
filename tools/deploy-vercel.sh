@@ -4,6 +4,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+[ -s "$HOME/.nvm/nvm.sh" ] && source "$HOME/.nvm/nvm.sh"
+
+if [ -z "${VERCEL_TOKEN:-}" ] && [ -f tools/.env ]; then
+  VERCEL_TOKEN=$(grep '^VERCEL_TOKEN=' tools/.env | cut -d= -f2)
+fi
 if [ -z "${VERCEL_TOKEN:-}" ]; then
   echo "VERCEL_TOKEN is not set" >&2
   exit 1
