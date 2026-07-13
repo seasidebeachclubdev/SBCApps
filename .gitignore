@@ -22,3 +22,7 @@ Thumbs.db
 *.log
 npm-debug.log*
 supabase/.temp/
+**/supabase/.temp/
+
+# Client roster exports (real member data - never commit)
+tools/out/
