@@ -21,14 +21,17 @@ for app in sbc-member-portal sbc-employee-app sbc-admin-dashboard; do
   echo "=== $app ==="
   cd "$app"
 
-  # pinned: vercel CLI 55 rejects vcp_ team tokens that the API accepts
-  npx --yes vercel@54 link --yes --project "$app" --token "$VERCEL_TOKEN" > /dev/null
+  # pinned to the exact CLI that works with the team-scoped vcp_ token;
+  # newer builds validate against /v2/user first, which team tokens fail
+  VC="vercel@54.12.2"
+  SCOPE="seaside-developer-s-projects"
+  npx --yes $VC link --yes --project "$app" --scope "$SCOPE" --token "$VERCEL_TOKEN" > /dev/null
 
   for envname in production preview; do
-    printf '%s' "$SUPABASE_URL_VALUE"  | npx --yes vercel@54 env add VITE_SUPABASE_URL "$envname" --token "$VERCEL_TOKEN" 2>/dev/null || true
-    printf '%s' "$SUPABASE_ANON_VALUE" | npx --yes vercel@54 env add VITE_SUPABASE_ANON_KEY "$envname" --token "$VERCEL_TOKEN" 2>/dev/null || true
+    printf '%s' "$SUPABASE_URL_VALUE"  | npx --yes $VC env add VITE_SUPABASE_URL "$envname" --scope "$SCOPE" --token "$VERCEL_TOKEN" 2>/dev/null || true
+    printf '%s' "$SUPABASE_ANON_VALUE" | npx --yes $VC env add VITE_SUPABASE_ANON_KEY "$envname" --scope "$SCOPE" --token "$VERCEL_TOKEN" 2>/dev/null || true
   done
 
-  npx --yes vercel@54 deploy --prod --yes --token "$VERCEL_TOKEN" 2>&1 | tail -2
+  npx --yes $VC deploy --prod --yes --scope "$SCOPE" --token "$VERCEL_TOKEN" 2>&1 | tail -2
   cd ..
 done
