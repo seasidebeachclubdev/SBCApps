@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 [ -s "$HOME/.nvm/nvm.sh" ] && source "$HOME/.nvm/nvm.sh"
 
-get() { grep "^$1=" .env | cut -d= -f2-; }
+get() { grep "^$1=" .env | cut -d= -f2- | tr -d '\r\n'; }
 export SUPABASE_ACCESS_TOKEN="$(get SUPABASE_ACCESS_TOKEN)"
 REF="$(get SUPABASE_PROJECT_REF)"
 

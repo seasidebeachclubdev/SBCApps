@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 
 # token from env or tools/.env
 if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ] && [ -f tools/.env ]; then
-  SUPABASE_ACCESS_TOKEN=$(grep '^SUPABASE_ACCESS_TOKEN=' tools/.env | cut -d= -f2)
+  SUPABASE_ACCESS_TOKEN=$(grep '^SUPABASE_ACCESS_TOKEN=' tools/.env | cut -d= -f2- | tr -d '\r\n')
   export SUPABASE_ACCESS_TOKEN
 fi
 if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ]; then
@@ -20,10 +20,14 @@ fi
 
 REF=epqvclktovtssfafgdgj
 
-for fn in send-guest-qr send-checkin-sms notify-onboarding send-issue-resolved-email send-member-email; do
+for fn in send-guest-qr send-checkin-sms notify-onboarding send-issue-resolved-email send-member-email approve-claim; do
   echo "=== deploying $fn ==="
   npx --yes supabase functions deploy "$fn" --project-ref "$REF" || exit 1
 done
+
+# claim-account is called by signed-out users; JWT verification must be off
+echo "=== deploying claim-account (public) ==="
+npx --yes supabase functions deploy claim-account --no-verify-jwt --project-ref "$REF" || exit 1
 
 echo
 echo "All functions deployed. Set secrets when accounts are ready:"

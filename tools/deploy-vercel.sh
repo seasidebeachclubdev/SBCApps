@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 [ -s "$HOME/.nvm/nvm.sh" ] && source "$HOME/.nvm/nvm.sh"
 
 if [ -z "${VERCEL_TOKEN:-}" ] && [ -f tools/.env ]; then
-  VERCEL_TOKEN=$(grep '^VERCEL_TOKEN=' tools/.env | cut -d= -f2)
+  VERCEL_TOKEN=$(grep '^VERCEL_TOKEN=' tools/.env | cut -d= -f2- | tr -d '\r\n')
 fi
 if [ -z "${VERCEL_TOKEN:-}" ]; then
   echo "VERCEL_TOKEN is not set" >&2
@@ -21,13 +21,14 @@ for app in sbc-member-portal sbc-employee-app sbc-admin-dashboard; do
   echo "=== $app ==="
   cd "$app"
 
-  npx --yes vercel link --yes --project "$app" --token "$VERCEL_TOKEN" > /dev/null
+  # pinned: vercel CLI 55 rejects vcp_ team tokens that the API accepts
+  npx --yes vercel@54 link --yes --project "$app" --token "$VERCEL_TOKEN" > /dev/null
 
   for envname in production preview; do
-    printf '%s' "$SUPABASE_URL_VALUE"  | npx vercel env add VITE_SUPABASE_URL "$envname" --token "$VERCEL_TOKEN" 2>/dev/null || true
-    printf '%s' "$SUPABASE_ANON_VALUE" | npx vercel env add VITE_SUPABASE_ANON_KEY "$envname" --token "$VERCEL_TOKEN" 2>/dev/null || true
+    printf '%s' "$SUPABASE_URL_VALUE"  | npx --yes vercel@54 env add VITE_SUPABASE_URL "$envname" --token "$VERCEL_TOKEN" 2>/dev/null || true
+    printf '%s' "$SUPABASE_ANON_VALUE" | npx --yes vercel@54 env add VITE_SUPABASE_ANON_KEY "$envname" --token "$VERCEL_TOKEN" 2>/dev/null || true
   done
 
-  npx vercel deploy --prod --yes --token "$VERCEL_TOKEN" 2>&1 | tail -2
+  npx --yes vercel@54 deploy --prod --yes --token "$VERCEL_TOKEN" 2>&1 | tail -2
   cd ..
 done
