@@ -109,23 +109,30 @@ export async function sendEmailBatch(messages: { to: string; subject: string; ht
 }
 
 export async function sendSms(to: string, body: string) {
-  const sid = Deno.env.get('TWILIO_ACCOUNT_SID')
+  const account = Deno.env.get('TWILIO_ACCOUNT_SID')
+  const keySid = Deno.env.get('TWILIO_API_KEY_SID')
+  const keySecret = Deno.env.get('TWILIO_API_KEY_SECRET')
   const tok = Deno.env.get('TWILIO_AUTH_TOKEN')
   const from = Deno.env.get('TWILIO_PHONE_NUMBER')
   const msgSvc = Deno.env.get('TWILIO_MESSAGING_SERVICE_SID')
-  if (!sid || !tok || (!from && !msgSvc)) {
+
+  // auth: API key pair preferred, account auth token as fallback
+  const basicUser = keySid && keySecret ? keySid : account
+  const basicPass = keySid && keySecret ? keySecret : tok
+  if (!account || !basicPass || (!from && !msgSvc)) {
     console.log(`[sms skipped - Twilio not configured] to=${to}`)
     return { skipped: true }
   }
+
   // A2P 10DLC: prefer the Messaging Service (it selects the sender and applies
   // the registered campaign); fall back to a direct From number if no MG SID.
   const params: Record<string, string> = { To: to, Body: body }
   if (msgSvc) params.MessagingServiceSid = msgSvc
   else params.From = from!
-  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${account}/Messages.json`, {
     method: 'POST',
     headers: {
-      Authorization: 'Basic ' + btoa(`${sid}:${tok}`),
+      Authorization: 'Basic ' + btoa(`${basicUser}:${basicPass}`),
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: new URLSearchParams(params),
