@@ -1,0 +1,53 @@
+# Cloud iOS build -> TestFlight, no local Mac needed.
+# Setup (one time, in the Codemagic dashboard):
+#   1. Sign up at codemagic.io with the GitHub account, add the SBCApps repo.
+#   2. In App Store Connect: Users and Access -> Integrations ->
+#      App Store Connect API -> Team Keys -> "+" -> role App Manager.
+#      Download the .p8 (single chance!), note the Key ID and Issuer ID.
+#   3. Codemagic -> Teams -> Integrations -> Developer Portal -> add that key,
+#      name it exactly: sbc-asc-key
+#   4. Create the app record in App Store Connect (bundle id com.sbcri.member)
+#      if it does not exist yet.
+#   5. Start the ios-testflight workflow. Signing certificates and
+#      provisioning profiles are created automatically from the API key.
+workflows:
+  ios-testflight:
+    name: iOS - build and upload to TestFlight
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: sbc-asc-key
+    environment:
+      node: 20
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.sbcri.member
+      vars:
+        # Supabase publishable values - safe to commit, they ship in the client bundle
+        VITE_SUPABASE_URL: "https://epqvclktovtssfafgdgj.supabase.co"
+        VITE_SUPABASE_ANON_KEY: "sb_publishable_Y4jS2hje1D-j0MkysN2HfA_HJGf_RuA"
+    scripts:
+      - name: Build web bundle
+        script: |
+          cd sbc-member-portal
+          npm ci
+          printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_ANON_KEY=%s\n' "$VITE_SUPABASE_URL" "$VITE_SUPABASE_ANON_KEY" > .env
+          npm run build
+          npx cap sync ios
+      - name: Install CocoaPods dependencies
+        script: |
+          cd sbc-member-portal/ios/App
+          pod install
+      - name: Build signed ipa
+        script: |
+          cd sbc-member-portal
+          xcode-project use-profiles
+          xcode-project build-ipa --workspace ios/App/App.xcworkspace --scheme App
+    artifacts:
+      - sbc-member-portal/build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
