@@ -27,7 +27,10 @@ supabase/.temp/
 # Client roster exports (real member data - never commit)
 tools/out/
 
-# Android release signing (lives outside the repo; never commit)
+# Signing secrets (live outside the repo; never commit)
 keystore.properties
 *.keystore
 *.jks
+*.p8
+*.mobileprovision
+*.certSigningRequest
