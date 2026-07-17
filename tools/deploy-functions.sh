@@ -20,7 +20,7 @@ fi
 
 REF=epqvclktovtssfafgdgj
 
-for fn in send-guest-qr send-checkin-sms notify-onboarding send-issue-resolved-email send-member-email approve-claim; do
+for fn in send-guest-qr send-checkin-sms notify-onboarding send-issue-resolved-email send-member-email approve-claim delete-account; do
   echo "=== deploying $fn ==="
   npx --yes supabase functions deploy "$fn" --project-ref "$REF" || exit 1
 done

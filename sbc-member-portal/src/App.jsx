@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext'
 import Login from './screens/Login'
 import ResetPassword from './screens/ResetPassword'
 import Onboarding from './screens/Onboarding'
+import Privacy from './screens/Privacy'
 import Home from './screens/Home'
 import Guests from './screens/Guests'
 import Fees from './screens/Fees'
@@ -68,6 +69,10 @@ function ProtectedLayout() {
 
 export default function App() {
   const { session, member, loading, recovery } = useAuth()
+  const location = useLocation()
+
+  // public page - required by the app stores, no login needed
+  if (location.pathname === '/privacy') return <Privacy />
 
   if (loading) {
     return (

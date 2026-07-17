@@ -5,9 +5,23 @@ import TideCard from '../components/TideCard'
 import FlagBanner from '../components/FlagBanner'
 
 export default function Home() {
-  const { member } = useAuth()
+  const { member, signOut } = useAuth()
   const [unpaidFees, setUnpaidFees] = useState(0)
   const [notices, setNotices] = useState([])
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function deleteAccount() {
+    setDeleting(true)
+    const { data, error } = await supabase.functions.invoke('delete-account')
+    if (error || !data?.ok) {
+      setDeleting(false)
+      setConfirmDelete(false)
+      alert('Could not delete your account. Please contact the club office.')
+      return
+    }
+    await signOut()
+  }
 
   useEffect(() => {
     fetchData()
@@ -98,6 +112,38 @@ export default function Home() {
         <div>🏊 Lifeguards: 9:30 AM – 5:00 PM daily</div>
         <div>📅 Season: June 20 – Labor Day</div>
         <div style={{ color: '#1a1a1a' }}>👥 Guests: $35/visit · Same guest max 4/season</div>
+      </div>
+
+      {/* Account */}
+      <div style={{ textAlign: 'center', padding: '4px 16px 12px' }}>
+        <a href="/privacy" style={{ fontSize: 12, color: '#6b6b6b', marginRight: 16 }}>Privacy Policy</a>
+        {!confirmDelete ? (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            style={{ background: 'none', border: 'none', color: '#6b6b6b', fontSize: 12, textDecoration: 'underline', cursor: 'pointer' }}
+          >
+            Delete my account
+          </button>
+        ) : (
+          <div className="card" style={{ marginTop: 10, textAlign: 'left' }}>
+            <div style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 10 }}>
+              This removes your login and contact details. Your membership itself is not affected —
+              you can re-claim your account later. Delete?
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={deleteAccount}
+                disabled={deleting}
+                style={{ flex: 1, padding: 10, border: 'none', borderRadius: 8, background: '#d64040', color: '#fff', fontSize: 13, fontWeight: 600 }}
+              >
+                {deleting ? 'Deleting…' : 'Permanently delete'}
+              </button>
+              <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
