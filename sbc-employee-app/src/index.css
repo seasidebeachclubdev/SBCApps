@@ -2,7 +2,7 @@
 body { font-family: -apple-system, 'SF Pro Text', Helvetica, Arial, sans-serif; background: #f2f2f7; min-height: 100vh; display: flex; justify-content: center; }
 #root { width: 100%; max-width: 430px; min-height: 100vh; background: #fff; display: flex; flex-direction: column; }
 :root { --teal: #50a2ad; --red: #d64040; --green: #0f6e56; --bg: #ffffff; --bg2: #f2f2f7; --border: #e0e0e0; --text: #1a1a1a; --muted: #6b6b6b; }
-input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; color: var(--text); background: var(--bg2); outline: none; font-family: inherit; }
+input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; color: var(--text); background: var(--bg2); outline: none; font-family: inherit; }
 input:focus, select:focus { border-color: var(--teal); background: #fff; }
 button { cursor: pointer; font-family: inherit; }
 .btn-primary { width: 100%; padding: 13px; background: var(--teal); color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; }
