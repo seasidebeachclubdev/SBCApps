@@ -49,8 +49,9 @@ const RULES = [
 ]
 
 export default function Rules() {
-  const [open, setOpen] = useState({})
-  const toggle = id => setOpen(o => ({ ...o, [id]: o[id] === false }))
+  // collapsed by default so the page reads as dropdowns; first section open
+  const [open, setOpen] = useState({ [RULES[0].id]: true })
+  const toggle = id => setOpen(o => ({ ...o, [id]: !o[id] }))
 
   return (
     <div className="screen">
@@ -58,7 +59,7 @@ export default function Rules() {
         ⚠️ All members and guests are responsible for knowing and following these rules.
       </div>
       {RULES.map(sec => {
-        const isOpen = open[sec.id] !== false
+        const isOpen = !!open[sec.id]
         return (
           <div key={sec.id} className="rule-section">
             <div className="rule-header" onClick={() => toggle(sec.id)}>

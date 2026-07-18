@@ -288,11 +288,10 @@ button { cursor: pointer; font-family: inherit; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--border);
   cursor: pointer;
 }
 .rule-body { display: none; }
-.rule-body.open { display: block; }
+.rule-body.open { display: block; border-top: 1px solid var(--border); }
 .rule-item {
   display: flex;
   gap: 10px;
