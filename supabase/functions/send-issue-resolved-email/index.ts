@@ -31,6 +31,8 @@ Deno.serve(async (req) => {
     .maybeSingle()
   if (!member?.email) return json({ ok: true, sent: 'none', note: 'member has no email' })
 
+  const note = String(body?.note ?? '').trim().slice(0, 1000)
+
   const result = await sendEmail({
     to: member.email,
     subject: `Your reported issue has been resolved`,
@@ -41,6 +43,11 @@ Deno.serve(async (req) => {
         <tr><td style="color:#6b6b6b;padding-right:14px">Category</td><td>${esc(issue.category)}</td></tr>
         <tr><td style="color:#6b6b6b;padding-right:14px">Subject</td><td><strong>${esc(issue.subject)}</strong></td></tr>
       </table>
+      ${note ? `
+      <div style="background:#f1f7f8;border-radius:8px;padding:12px 14px;margin-top:12px">
+        <div style="font-size:12px;color:#6b6b6b;margin-bottom:4px">Note from the club</div>
+        <div style="white-space:pre-wrap">${esc(note)}</div>
+      </div>` : ''}
       <p>Thank you for helping keep the club in shape. If the problem comes back, submit a new report from the Issues tab.</p>
     `),
   })

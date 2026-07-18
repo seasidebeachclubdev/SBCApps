@@ -6,7 +6,7 @@ const AuthContext = createContext(null)
 // Tab access by role — matches handoff doc exactly
 export const ROLE_TABS = {
   gate_device:      ['gate', 'members', 'fees'],
-  ops_manager:      ['overview', 'gate', 'members', 'fees', 'employees', 'payroll', 'comms', 'issues'],
+  ops_manager:      ['overview', 'gate', 'members', 'fees', 'employees', 'payroll', 'comms', 'issues', 'reports'],
   business_manager: ['overview', 'gate', 'members', 'fees', 'employees', 'payroll', 'comms', 'issues', 'reports'],
 }
 
