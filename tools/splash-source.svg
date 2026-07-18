@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <rect width="1024" height="1024" fill="#50a2ad"/>
-  <circle cx="512" cy="420" r="70" fill="#ffd24a"/>
-  <text x="512" y="600" font-family="Helvetica, Arial, sans-serif" font-size="200" font-weight="700" fill="#ffffff" text-anchor="middle">SBC</text>
-  <text x="512" y="660" font-family="Helvetica, Arial, sans-serif" font-size="38" font-weight="600" letter-spacing="6" fill="#dff0f2" text-anchor="middle">SEASIDE BEACH CLUB</text>
+  <!-- all content stays inside the central ~40% so aspect-fill cropping on
+       tall phones (9:19.5) never cuts it off -->
+  <circle cx="512" cy="400" r="56" fill="#ffd24a"/>
+  <text x="512" y="560" font-family="Helvetica, Arial, sans-serif" font-size="150" font-weight="700" fill="#ffffff" text-anchor="middle">SBC</text>
+  <text x="512" y="614" font-family="Helvetica, Arial, sans-serif" font-size="26" font-weight="600" letter-spacing="3" fill="#dff0f2" text-anchor="middle">SEASIDE BEACH CLUB</text>
 </svg>

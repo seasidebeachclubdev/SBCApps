@@ -187,8 +187,11 @@ button { cursor: pointer; font-family: inherit; }
 
 .top-bar {
   background: var(--teal);
-  /* safe-area inset keeps the bar clear of the iOS notch / Android cutout */
-  padding: calc(10px + env(safe-area-inset-top, 0px)) 18px 14px;
+  /* safe-area insets keep the bar clear of the notch / cutout on all sides */
+  padding: calc(10px + env(safe-area-inset-top, 0px))
+           calc(18px + env(safe-area-inset-right, 0px))
+           14px
+           calc(18px + env(safe-area-inset-left, 0px));
   color: white;
   flex-shrink: 0;
 }
@@ -200,8 +203,11 @@ button { cursor: pointer; font-family: inherit; }
   border-top: 1px solid var(--border);
   display: flex;
   flex-shrink: 0;
-  /* keep tappable area above the iOS home indicator */
-  padding: 6px 0 calc(10px + env(safe-area-inset-bottom, 0px));
+  /* keep tappable area above the home indicator and clear of side insets */
+  padding: 6px
+           env(safe-area-inset-right, 0px)
+           calc(10px + env(safe-area-inset-bottom, 0px))
+           env(safe-area-inset-left, 0px);
 }
 .nav-item {
   flex: 1;

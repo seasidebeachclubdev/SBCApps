@@ -44,6 +44,12 @@ workflows:
         script: |
           cd sbc-member-portal/ios/App
           pod install
+      - name: Set unique build number
+        script: |
+          # Apple rejects re-used build numbers; BUILD_NUMBER is Codemagic's
+          # per-project counter, so every run uploads a higher one
+          cd sbc-member-portal/ios/App
+          agvtool new-version -all $BUILD_NUMBER
       - name: Build signed ipa
         script: |
           cd sbc-member-portal
