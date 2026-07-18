@@ -22,8 +22,12 @@ workflows:
       xcode: latest
       cocoapods: default
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.sbcri.member
+        # manual signing assets created via the ASC API and uploaded in
+        # Codemagic -> Code signing identities under these reference names
+        certificates:
+          - sbc_distribution
+        provisioning_profiles:
+          - sbc_member_appstore
       vars:
         # Supabase publishable values - safe to commit, they ship in the client bundle
         VITE_SUPABASE_URL: "https://epqvclktovtssfafgdgj.supabase.co"
