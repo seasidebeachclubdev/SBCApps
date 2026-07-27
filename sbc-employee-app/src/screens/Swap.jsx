@@ -21,7 +21,7 @@ export default function Swap() {
     const today = localDateStr()
     // exclude the employee's own dropped shifts - you can't claim your own
     const { data: open } = await supabase
-      .from('shifts').select('*, employees(name, area)')
+      .from('shifts').select('*, employees!employee_id(name, area)')
       .eq('status', 'dropped').neq('employee_id', employee.id)
       .gte('shift_date', today).order('shift_date')
     setOpenShifts(open || [])

@@ -89,7 +89,7 @@ export default function Schedule() {
       <div className="section-label">This week</div>
       <div className="list-card">
         {weekDays.map(day => {
-          const shift = shifts.find(s => s.shift_date === day.date)
+          const shift = shifts.find(s => s.shift_date === day.date && s.status !== 'cancelled')
           const isToday = day.date === todayStr
           const dotClass = isToday ? 'today' : shift ? 'work' : 'off'
           return (

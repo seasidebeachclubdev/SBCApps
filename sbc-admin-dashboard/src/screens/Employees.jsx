@@ -29,6 +29,9 @@ export default function Employees() {
   const [clockForm, setClockForm] = useState({ in: '', out: '', note: '' })
   const [shiftDay, setShiftDay] = useState(null)
   const [shiftForm, setShiftForm] = useState({ start: '', end: '' })
+  const [templates, setTemplates] = useState([])
+  const [patternDay, setPatternDay] = useState(null)
+  const [patternForm, setPatternForm] = useState({ start: '', end: '' })
   const [showAdd, setShowAdd] = useState(false)
   const [addForm, setAddForm] = useState({ name: '', email: '', role: 'kitchen' })
   const [toast, setToast] = useState('')
@@ -37,11 +40,17 @@ export default function Employees() {
   useEffect(() => { fetchEmployees() }, [])
 
   async function fetchEmployees() {
+    // top up the coming two weeks from the weekly patterns (idempotent)
+    await supabase.rpc('materialize_shifts', { days_ahead: 14 })
     // clock_records and shifts each have two FKs to employees; name the join
-    const { data } = await supabase.from('employees')
-      .select('*, clock_records!employee_id(id, clock_in, clock_out, shift_date, override_note, note), shifts!employee_id(id, shift_date, start_time, end_time, area, status)')
-      .eq('active', true).order('name')
+    const [{ data }, { data: tpl }] = await Promise.all([
+      supabase.from('employees')
+        .select('*, clock_records!employee_id(id, clock_in, clock_out, shift_date, override_note, note), shifts!employee_id(id, shift_date, start_time, end_time, area, status)')
+        .eq('active', true).order('name'),
+      supabase.from('schedule_templates').select('*'),
+    ])
     setEmployees(data || [])
+    setTemplates(tpl || [])
   }
 
   const today = localDateStr()
@@ -97,14 +106,13 @@ export default function Employees() {
     if (!shiftForm.start || !shiftForm.end) return flash('Start and end times are required')
     if (shiftForm.end <= shiftForm.start) return flash('End must be after start')
     setBusy(true)
-    const payload = { start_time: shiftForm.start, end_time: shiftForm.end }
+    const payload = { start_time: shiftForm.start, end_time: shiftForm.end, status: 'scheduled' }
     const { error } = shift
       ? await supabase.from('shifts').update(payload).eq('id', shift.id)
       : await supabase.from('shifts').insert({
           employee_id: selected.id,
           shift_date: date,
           area: selected.area,
-          status: 'scheduled',
           ...payload,
         })
     setBusy(false)
@@ -114,11 +122,67 @@ export default function Employees() {
     fetchEmployees()
   }
 
-  async function deleteShift(shift) {
+  // "cancelled" (not deleted) so the weekly pattern does not re-create the day
+  async function cancelShift(shift) {
     setBusy(true)
-    const { error } = await supabase.from('shifts').delete().eq('id', shift.id)
+    const { error } = await supabase.from('shifts').update({ status: 'cancelled' }).eq('id', shift.id)
     setBusy(false)
-    flash(error ? 'Could not remove shift' : 'Shift removed')
+    flash(error ? 'Could not cancel shift' : 'Shift cancelled for that day')
+    fetchEmployees()
+  }
+
+  // ---------- weekly pattern ----------
+  const WEEKDAYS = [
+    { d: 1, label: 'Monday' }, { d: 2, label: 'Tuesday' }, { d: 3, label: 'Wednesday' },
+    { d: 4, label: 'Thursday' }, { d: 5, label: 'Friday' }, { d: 6, label: 'Saturday' }, { d: 0, label: 'Sunday' },
+  ]
+  const templateFor = weekday => templates.find(t => t.employee_id === selected?.id && t.weekday === weekday)
+  const futureDatesFor = weekday => {
+    const out = []
+    for (let i = 1; i <= 14; i++) { const d = new Date(); d.setDate(d.getDate() + i); if (d.getDay() === weekday) out.push(localDateStr(d)) }
+    return out
+  }
+
+  function startPatternEdit(weekday, tpl) {
+    setPatternDay(weekday)
+    setPatternForm({ start: tpl?.start_time?.slice(0, 5) ?? '09:00', end: tpl?.end_time?.slice(0, 5) ?? '17:00' })
+  }
+
+  async function savePattern(weekday) {
+    if (!patternForm.start || !patternForm.end) return flash('Start and end times are required')
+    if (patternForm.end <= patternForm.start) return flash('End must be after start')
+    setBusy(true)
+    const { error } = await supabase.from('schedule_templates').upsert({
+      employee_id: selected.id,
+      weekday,
+      start_time: patternForm.start,
+      end_time: patternForm.end,
+      area: selected.area,
+    }, { onConflict: 'employee_id,weekday' })
+    if (!error) {
+      // upcoming weeks adopt the new pattern; today's shift is left alone
+      await supabase.from('shifts').delete()
+        .eq('employee_id', selected.id).eq('status', 'scheduled')
+        .in('shift_date', futureDatesFor(weekday))
+      await supabase.rpc('materialize_shifts', { days_ahead: 14 })
+    }
+    setBusy(false)
+    if (error) return flash('Could not save pattern — try again')
+    setPatternDay(null)
+    flash('Weekly pattern saved')
+    fetchEmployees()
+  }
+
+  async function clearPattern(weekday, tpl) {
+    setBusy(true)
+    const { error } = await supabase.from('schedule_templates').delete().eq('id', tpl.id)
+    if (!error) {
+      await supabase.from('shifts').delete()
+        .eq('employee_id', selected.id).eq('status', 'scheduled')
+        .in('shift_date', futureDatesFor(weekday))
+    }
+    setBusy(false)
+    flash(error ? 'Could not update pattern' : 'Weekly pattern cleared')
     fetchEmployees()
   }
 
@@ -224,8 +288,48 @@ export default function Employees() {
 
         {view === 'schedule' && (
           <>
+            <div className="section-label">Weekly pattern · repeats every week</div>
+            <div className="list-card">
+              {WEEKDAYS.map(({ d, label }) => {
+                const tpl = templateFor(d)
+                const editing = patternDay === d
+                return (
+                  <div key={d} style={{ borderBottom: '1px solid #e0e0e0' }}>
+                    <div className="list-item" style={{ borderBottom: 'none' }}>
+                      <div style={{ width: 86, flexShrink: 0, fontSize: 12, fontWeight: 500 }}>{label}</div>
+                      <div style={{ flex: 1, fontSize: 12, color: tpl ? '#1a1a1a' : '#6b6b6b' }}>
+                        {tpl ? `${fmtST(tpl.start_time)} – ${fmtST(tpl.end_time)}` : 'Off'}
+                      </div>
+                      {tpl && (
+                        <button className="btn-secondary" style={{ fontSize: 11, padding: '4px 8px' }} disabled={busy}
+                          onClick={() => clearPattern(d, tpl)}>✕</button>
+                      )}
+                      <button className="btn-secondary" style={{ fontSize: 11, padding: '4px 8px', marginLeft: 6 }}
+                        onClick={() => (editing ? setPatternDay(null) : startPatternEdit(d, tpl))}>
+                        {editing ? 'Cancel' : tpl ? 'Edit' : 'Set'}
+                      </button>
+                    </div>
+                    {editing && (
+                      <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <div className="fg"><label className="fl">Start</label>
+                            <input type="time" value={patternForm.start} onChange={e => setPatternForm({ ...patternForm, start: e.target.value })} /></div>
+                          <div className="fg"><label className="fl">End</label>
+                            <input type="time" value={patternForm.end} onChange={e => setPatternForm({ ...patternForm, end: e.target.value })} /></div>
+                        </div>
+                        <button className="btn-teal" disabled={busy} onClick={() => savePattern(d)}>
+                          {busy ? 'Saving…' : `Save every ${label}`}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="section-label">Next 14 days · one-off changes</div>
             <div className="card" style={{ fontSize: 12, color: '#6b6b6b' }}>
-              Next 14 days. Shifts appear in the employee's staff app immediately.
+              Generated from the weekly pattern. Edit or cancel individual days here; shifts appear in the employee's staff app immediately.
             </div>
             <div className="list-card">
               {futureDays.map(date => {
@@ -235,13 +339,17 @@ export default function Employees() {
                   <div key={date} style={{ borderBottom: '1px solid #e0e0e0' }}>
                     <div className="list-item" style={{ borderBottom: 'none' }}>
                       <div style={{ width: 86, flexShrink: 0, fontSize: 12, fontWeight: date === today ? 600 : 500 }}>{dayLabel(date)}</div>
-                      <div style={{ flex: 1, fontSize: 12, color: shift ? '#1a1a1a' : '#6b6b6b' }}>
-                        {shift ? `${fmtST(shift.start_time)} – ${fmtST(shift.end_time)} · ${shift.area}` : 'Off'}
+                      <div style={{ flex: 1, fontSize: 12, color: shift && shift.status !== 'cancelled' ? '#1a1a1a' : '#6b6b6b' }}>
+                        {shift
+                          ? shift.status === 'cancelled'
+                            ? 'Off (cancelled)'
+                            : `${fmtST(shift.start_time)} – ${fmtST(shift.end_time)} · ${shift.area}`
+                          : 'Off'}
                         {shift?.status === 'dropped' && <span style={{ color: '#c98a1b' }}> · dropped</span>}
                       </div>
-                      {shift && (
+                      {shift && shift.status !== 'cancelled' && (
                         <button className="btn-secondary" style={{ fontSize: 11, padding: '4px 8px' }} disabled={busy}
-                          onClick={() => deleteShift(shift)}>✕</button>
+                          onClick={() => cancelShift(shift)}>✕</button>
                       )}
                       <button className="btn-secondary" style={{ fontSize: 11, padding: '4px 8px', marginLeft: 6 }}
                         onClick={() => (editing ? setShiftDay(null) : startShiftEdit(date, shift))}>
