@@ -35,13 +35,28 @@ function NavBar() {
   )
 }
 
+const signOutStyle = {
+  background: 'rgba(255,255,255,0.15)',
+  border: '1px solid rgba(255,255,255,0.4)',
+  color: '#fff',
+  borderRadius: 7,
+  padding: '5px 10px',
+  fontSize: 11,
+  fontWeight: 500,
+  cursor: 'pointer',
+  flexShrink: 0,
+}
+
 function TopBar() {
-  const { employee } = useAuth()
+  const { employee, signOut } = useAuth()
   const location = useLocation()
   return (
-    <div className="top-bar">
-      <div className="top-bar-sub">SBC Staff · {employee?.area || ''}</div>
-      <div className="top-bar-title">{TITLES[location.pathname] || 'Schedule'}</div>
+    <div className="top-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+      <div>
+        <div className="top-bar-sub">SBC Staff · {employee?.area || ''}</div>
+        <div className="top-bar-title">{TITLES[location.pathname] || 'Schedule'}</div>
+      </div>
+      <button onClick={signOut} style={signOutStyle}>Sign Out</button>
     </div>
   )
 }

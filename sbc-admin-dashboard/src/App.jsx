@@ -31,15 +31,30 @@ function NavBar({ tabs }) {
   )
 }
 
+const signOutStyle = {
+  background: 'rgba(255,255,255,0.15)',
+  border: '1px solid rgba(255,255,255,0.4)',
+  color: '#fff',
+  borderRadius: 7,
+  padding: '5px 10px',
+  fontSize: 11,
+  fontWeight: 500,
+  cursor: 'pointer',
+  flexShrink: 0,
+}
+
 function TopBar({ tabs }) {
-  const { admin } = useAuth()
+  const { admin, signOut } = useAuth()
   const location = useLocation()
   const tab = location.pathname.slice(1)
   const roleLabel = { gate_device: 'Gate Device', ops_manager: 'Ops Manager', business_manager: 'Business Mgr' }[admin?.role] || ''
   return (
-    <div className="top-bar">
-      <div className="top-bar-sub">{roleLabel} · admin.sbcri.com</div>
-      <div className="top-bar-title">{TITLES[tab] || ''}</div>
+    <div className="top-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+      <div>
+        <div className="top-bar-sub">{roleLabel} · admin.sbcri.com</div>
+        <div className="top-bar-title">{TITLES[tab] || ''}</div>
+      </div>
+      <button onClick={signOut} style={signOutStyle}>Sign Out</button>
     </div>
   )
 }
