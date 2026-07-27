@@ -41,8 +41,13 @@ export default function Overview() {
     const { data: checkins } = await supabase.from('guests').select('guest_name, member_name, visit_date, checked_in_by').eq('visit_date', today).not('checked_in_by', 'is', null).order('created_at', { ascending: false }).limit(4)
     setRecentCheckins(checkins || [])
 
-    // Pending onboarding
-    const { data: pending } = await supabase.from('members').select('first_name, last_name, member_id').eq('onboarded', false).limit(5)
+    // Pending onboarding = has a portal login but never finished account
+    // setup. Roster members who have not activated at all do not count.
+    const { data: pending } = await supabase.from('members')
+      .select('first_name, last_name, member_id')
+      .eq('onboarded', false)
+      .not('auth_user_id', 'is', null)
+      .limit(5)
     setPendingOnboarding(pending || [])
 
     // Open issues
@@ -145,12 +150,12 @@ export default function Overview() {
       {/* Pending onboarding */}
       {pendingOnboarding.length > 0 && (
         <>
-          <div className="section-label">Pending onboarding</div>
+          <div className="section-label">Account setup started, not finished</div>
           <div className="list-card">
             {pendingOnboarding.map(m => (
               <div key={m.member_id} className="list-item">
                 <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{m.first_name} {m.last_name}</div>
-                <span className="ob-flag">Needs review</span>
+                <span className="ob-flag">Setup pending</span>
               </div>
             ))}
           </div>

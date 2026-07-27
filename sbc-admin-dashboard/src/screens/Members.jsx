@@ -116,7 +116,7 @@ export default function Members() {
         <input type="text" placeholder="Search by name or ID..." value={search} onChange={e => setSearch(e.target.value)} />
       </div>
       <div className="card" style={{ textAlign: 'center', fontSize: 12, color: '#6b6b6b' }}>
-        {members.length} total · {members.filter(m => m.onboarded).length} onboarded · {members.filter(m => !m.onboarded).length} pending
+        {members.length} total · {members.filter(m => m.auth_user_id).length} with accounts · {members.filter(m => m.onboarded).length} onboarded
       </div>
       <div className="list-card">
         {filtered.map(m => (
@@ -124,7 +124,8 @@ export default function Members() {
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 500 }}>
                 {m.first_name} {m.last_name}
-                {!m.onboarded && <span className="ob-flag" style={{ marginLeft: 8 }}>Pending</span>}
+                {/* flag only members who have a login but never finished setup */}
+                {m.auth_user_id && !m.onboarded && <span className="ob-flag" style={{ marginLeft: 8 }}>Setting up</span>}
               </div>
               <div style={{ fontSize: 11, color: '#6b6b6b' }}>{m.member_id} · {m.membership_type}{m.cabana ? ` · Cabana ${m.cabana}` : ''}</div>
             </div>

@@ -32,6 +32,7 @@ export default function Employees() {
   const [templates, setTemplates] = useState([])
   const [patternDay, setPatternDay] = useState(null)
   const [patternForm, setPatternForm] = useState({ start: '', end: '' })
+  const [swaps, setSwaps] = useState([])
   const [showAdd, setShowAdd] = useState(false)
   const [addForm, setAddForm] = useState({ name: '', email: '', role: 'kitchen' })
   const [toast, setToast] = useState('')
@@ -43,14 +44,21 @@ export default function Employees() {
     // top up the coming two weeks from the weekly patterns (idempotent)
     await supabase.rpc('materialize_shifts', { days_ahead: 14 })
     // clock_records and shifts each have two FKs to employees; name the join
-    const [{ data }, { data: tpl }] = await Promise.all([
+    const [{ data }, { data: tpl }, { data: swapRows }] = await Promise.all([
       supabase.from('employees')
         .select('*, clock_records!employee_id(id, clock_in, clock_out, shift_date, override_note, note), shifts!employee_id(id, shift_date, start_time, end_time, area, status)')
         .eq('active', true).order('name'),
       supabase.from('schedule_templates').select('*'),
+      supabase.from('shifts')
+        .select('*, owner:employees!employee_id(name), claimer:employees!picked_up_by(name)')
+        .in('status', ['dropped', 'picked_up'])
+        .gte('shift_date', localDateStr())
+        .order('shift_date'),
     ])
     setEmployees(data || [])
     setTemplates(tpl || [])
+    // needs attention: open drops, and claims not yet approved
+    setSwaps((swapRows || []).filter(s => s.status === 'dropped' || !s.approved))
   }
 
   const today = localDateStr()
@@ -183,6 +191,54 @@ export default function Employees() {
     }
     setBusy(false)
     flash(error ? 'Could not update pattern' : 'Weekly pattern cleared')
+    fetchEmployees()
+  }
+
+  // ---------- dropped shifts & pickup approvals ----------
+  async function approvePickup(shift) {
+    setBusy(true)
+    // the shift transfers to the claimer and returns to the schedule
+    const { error } = await supabase.from('shifts').update({
+      employee_id: shift.picked_up_by,
+      status: 'scheduled',
+      approved: true,
+      dropped_reason: null,
+    }).eq('id', shift.id)
+    setBusy(false)
+    flash(error ? 'Could not approve pickup' : `Shift now belongs to ${shift.claimer?.name ?? 'the claimer'}`)
+    fetchEmployees()
+  }
+
+  async function denyPickup(shift) {
+    setBusy(true)
+    const { error } = await supabase.from('shifts').update({
+      status: 'dropped',
+      picked_up_by: null,
+      approved: false,
+    }).eq('id', shift.id)
+    setBusy(false)
+    flash(error ? 'Could not deny pickup' : 'Pickup denied — shift is open again')
+    fetchEmployees()
+  }
+
+  async function restoreDrop(shift) {
+    setBusy(true)
+    const { error } = await supabase.from('shifts').update({
+      status: 'scheduled',
+      dropped_reason: null,
+      picked_up_by: null,
+      approved: false,
+    }).eq('id', shift.id)
+    setBusy(false)
+    flash(error ? 'Could not restore shift' : `Shift returned to ${shift.owner?.name ?? 'the employee'}`)
+    fetchEmployees()
+  }
+
+  async function cancelDroppedDay(shift) {
+    setBusy(true)
+    const { error } = await supabase.from('shifts').update({ status: 'cancelled' }).eq('id', shift.id)
+    setBusy(false)
+    flash(error ? 'Could not cancel shift' : 'Shift cancelled — nobody works that slot')
     fetchEmployees()
   }
 
@@ -385,6 +441,50 @@ export default function Employees() {
   return (
     <div className="screen">
       {toast && <div className="success-box">✓ {toast}</div>}
+
+      {swaps.length > 0 && (
+        <>
+          <div className="section-label">Shift swaps needing attention ({swaps.length})</div>
+          {swaps.map(s => (
+            <div key={s.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  {dayLabel(s.shift_date)} · {fmtST(s.start_time)} – {fmtST(s.end_time)} · {s.area}
+                </div>
+                <span className={`badge ${s.status === 'dropped' ? 'badge-amber' : 'badge-blue'}`}>
+                  {s.status === 'dropped' ? 'Dropped' : 'Claim pending'}
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: '#6b6b6b' }}>
+                {s.owner?.name}
+                {s.dropped_reason ? ` — "${s.dropped_reason}"` : ''}
+                {s.status === 'picked_up' && s.claimer && <> · claimed by <strong style={{ color: '#1a1a1a' }}>{s.claimer.name}</strong></>}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {s.status === 'picked_up' ? (
+                  <>
+                    <button className="btn-teal" style={{ flex: 1 }} disabled={busy} onClick={() => approvePickup(s)}>
+                      Approve — give to {s.claimer?.name?.split(' ')[0] ?? 'claimer'}
+                    </button>
+                    <button className="btn-secondary" style={{ flex: 1 }} disabled={busy} onClick={() => denyPickup(s)}>
+                      Deny
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button className="btn-teal" style={{ flex: 1 }} disabled={busy} onClick={() => restoreDrop(s)}>
+                      Return to {s.owner?.name?.split(' ')[0] ?? 'owner'}
+                    </button>
+                    <button className="btn-secondary" style={{ flex: 1 }} disabled={busy} onClick={() => cancelDroppedDay(s)}>
+                      Cancel shift
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
 
       <div className="section-label">On duty now ({onDuty.length})</div>
       {onDuty.length === 0 ? (
