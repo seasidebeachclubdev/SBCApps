@@ -21,8 +21,10 @@ const client = new pg.Client({
 })
 await client.connect()
 try {
-  await client.query(readFileSync(file, 'utf8'))
+  const result = await client.query(readFileSync(file, 'utf8'))
   console.log(`applied ${file}`)
+  const rows = Array.isArray(result) ? result.at(-1)?.rows : result.rows
+  if (rows?.length) rows.forEach(r => console.log(' ', JSON.stringify(r)))
 } catch (e) {
   console.error(`FAILED: ${e.message}`)
   process.exitCode = 1

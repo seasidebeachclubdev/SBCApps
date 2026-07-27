@@ -19,7 +19,7 @@ export default function Payroll() {
     const since = new Date()
     since.setDate(since.getDate() - 14)
     const { data } = await supabase
-      .from('employees').select('id, name, area, clock_records(clock_in, clock_out, shift_date)')
+      .from('employees').select('id, name, area, clock_records!employee_id(clock_in, clock_out, shift_date)')
       .eq('active', true)
       .gte('clock_records.shift_date', localDateStr(since))
       .order('name')
