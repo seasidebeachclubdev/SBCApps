@@ -4,10 +4,12 @@ import { supabase } from '../lib/supabase'
 const AuthContext = createContext(null)
 
 // Tab access by role — matches handoff doc exactly
+// Gate (the QR scanner) is gate-workers only per the club's request;
+// managers keep everything else.
 export const ROLE_TABS = {
   gate_device:      ['gate', 'members', 'fees'],
-  ops_manager:      ['overview', 'gate', 'members', 'fees', 'employees', 'payroll', 'comms', 'issues', 'reports'],
-  business_manager: ['overview', 'gate', 'members', 'fees', 'employees', 'payroll', 'comms', 'issues', 'reports'],
+  ops_manager:      ['overview', 'members', 'fees', 'employees', 'payroll', 'comms', 'issues', 'reports'],
+  business_manager: ['overview', 'members', 'fees', 'employees', 'payroll', 'comms', 'issues', 'reports'],
 }
 
 export function AuthProvider({ children }) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { localDateStr } from '../lib/dates'
+import { localDateStr, roundHours } from '../lib/dates'
 
 const csvq = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
 
@@ -104,7 +104,7 @@ export default function Reports() {
     const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
     const hours7 = clocks
       .filter(c => c.clock_in && c.clock_out && c.shift_date >= localDateStr(weekAgo))
-      .reduce((a, c) => a + (new Date(c.clock_out) - new Date(c.clock_in)) / 3600000, 0)
+      .reduce((a, c) => a + roundHours((new Date(c.clock_out) - new Date(c.clock_in)) / 3600000), 0)
     const areas = {}
     for (const e of employees.filter(e => e.active)) areas[e.area || 'Other'] = (areas[e.area || 'Other'] || 0) + 1
 

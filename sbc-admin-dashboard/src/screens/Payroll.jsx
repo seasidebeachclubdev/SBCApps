@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { localDateStr } from '../lib/dates'
+import { localDateStr, roundHours } from '../lib/dates'
 
 // Quote a CSV field when it contains commas, quotes, or newlines.
 const csvField = v => {
@@ -24,9 +24,10 @@ export default function Payroll() {
       .gte('clock_records.shift_date', localDateStr(since))
       .order('name')
     setEmployees((data || []).map(emp => {
+      // each shift rounds to the nearest 15 minutes before summing
       const hrs = (emp.clock_records || []).reduce((a, r) => {
         if (!r.clock_in || !r.clock_out) return a
-        return a + (new Date(r.clock_out) - new Date(r.clock_in)) / 3600000
+        return a + roundHours((new Date(r.clock_out) - new Date(r.clock_in)) / 3600000)
       }, 0)
       return { ...emp, hours: Math.round(hrs * 10) / 10 }
     }))

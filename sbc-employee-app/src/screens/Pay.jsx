@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { localDateStr, roundHours } from '../lib/dates'
 
 export default function Pay() {
   const { employee } = useAuth()
@@ -17,16 +18,17 @@ export default function Pay() {
       .from('clock_records')
       .select('*')
       .eq('employee_id', employee.id)
-      .gte('shift_date', since.toISOString().slice(0, 10))
+      .gte('shift_date', localDateStr(since))
       .not('clock_out', 'is', null)
       .order('shift_date', { ascending: false })
 
     setRecords(data || [])
+    // each shift rounds to the nearest 15 minutes before summing
     const hrs = (data || []).reduce((a, r) => {
       if (!r.clock_in || !r.clock_out) return a
-      return a + (new Date(r.clock_out) - new Date(r.clock_in)) / 3600000
+      return a + roundHours((new Date(r.clock_out) - new Date(r.clock_in)) / 3600000)
     }, 0)
-    setTotalHours(Math.round(hrs * 10) / 10)
+    setTotalHours(hrs)
   }
 
   const HOURLY_RATE = 16
@@ -66,7 +68,7 @@ export default function Pay() {
         <div className="list-card">
           {records.slice(0, 10).map(r => {
             const hrs = r.clock_in && r.clock_out
-              ? Math.round(((new Date(r.clock_out) - new Date(r.clock_in)) / 3600000) * 10) / 10
+              ? roundHours((new Date(r.clock_out) - new Date(r.clock_in)) / 3600000)
               : 0
             return (
               <div key={r.id} className="list-item">
