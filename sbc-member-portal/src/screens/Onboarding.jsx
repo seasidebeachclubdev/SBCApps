@@ -36,21 +36,32 @@ export default function Onboarding() {
       full_name: name.trim(),
       verified: name.trim().toLowerCase() === fullName,
     }))
+    // Replace rather than append so a retried setup (or the roster import)
+    // never leaves duplicate rows behind
+    const replaceRows = async (table, rows) => {
+      const del = await supabase.from(table).delete().eq('member_id', member.member_id)
+      if (del.error) return del
+      return supabase.from(table).insert(rows)
+    }
+
     const writes = []
     if (householdRows.length) {
-      writes.push(supabase.from('household_members').insert(householdRows))
+      writes.push(replaceRows('household_members', householdRows))
     }
 
     // Save contact info
     writes.push(supabase.from('members').update({ phone, email }).eq('id', member.id))
 
-    // Save vehicles
-    const vehicleRows = vehicles.filter(v => v.make.trim()).map(v => ({
+    // Save vehicles - the form field is "plate" but the column is "license_plate"
+    const vehicleRows = vehicles.filter(v => v.make.trim() || v.plate.trim()).map(v => ({
       member_id: member.member_id,
-      ...v,
+      make: v.make.trim() || null,
+      model: v.model.trim() || null,
+      color: v.color.trim() || null,
+      license_plate: v.plate.trim() || null,
     }))
     if (vehicleRows.length) {
-      writes.push(supabase.from('vehicles').insert(vehicleRows))
+      writes.push(replaceRows('vehicles', vehicleRows))
     }
 
     const results = await Promise.all(writes)
