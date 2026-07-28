@@ -33,4 +33,5 @@ keystore.properties
 *.jks
 *.p8
 *.mobileprovision
-*.certSigningRequesttools/commit-msg.txt
+*.certSigningRequest
+tools/commit-msg.txt
