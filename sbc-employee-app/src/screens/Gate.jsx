@@ -25,6 +25,7 @@ export default function Gate() {
   const [toast, setToast] = useState('')
   const [scannerActive, setScannerActive] = useState(false)
   const scannerRef = useRef(null)
+  const facingRef = useRef('environment') // back camera first
 
   const today = localDateStr()
 
@@ -54,27 +55,51 @@ export default function Gate() {
     setSearchResults(data || [])
   }
 
-  async function startScanner() {
+  // Direct camera control (no Html5QrcodeScanner widget: it remembers the
+  // first camera choice in localStorage and auto-starts with it forever).
+  async function startScanner(mode = 'environment') {
     setScannerActive(true)
-    const { Html5QrcodeScanner } = await import('html5-qrcode')
-    const scanner = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: { width: 250, height: 250 } })
+    const { Html5Qrcode } = await import('html5-qrcode')
+    // the container renders with scannerActive; wait for it to exist
+    for (let i = 0; i < 20 && !document.getElementById('qr-reader'); i++)
+      await new Promise(r => setTimeout(r, 50))
+    if (!document.getElementById('qr-reader')) { setScannerActive(false); return }
+    const scanner = new Html5Qrcode('qr-reader')
     scannerRef.current = scanner
-    scanner.render(
-      async (decodedText) => {
-        scanner.clear()
-        setScannerActive(false)
-        await handleScan(decodedText)
-      },
-      (err) => console.warn('QR scan error:', err)
-    )
+    facingRef.current = mode
+    try {
+      await scanner.start(
+        { facingMode: mode },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        async (decodedText) => {
+          if (scannerRef.current !== scanner) return // already stopping
+          await stopScanner()
+          await handleScan(decodedText)
+        },
+        () => {} // per-frame decode misses are normal
+      )
+    } catch {
+      scannerRef.current = null
+      setScannerActive(false)
+      setToast('Could not start the camera — check camera permission')
+      setTimeout(() => setToast(''), 4000)
+    }
   }
 
-  function stopScanner() {
-    if (scannerRef.current) {
-      try { scannerRef.current.clear() } catch {}
-      scannerRef.current = null
-    }
+  async function stopScanner() {
+    const scanner = scannerRef.current
+    scannerRef.current = null
     setScannerActive(false)
+    if (scanner) {
+      try { await scanner.stop() } catch {}
+      try { scanner.clear() } catch {}
+    }
+  }
+
+  async function flipCamera() {
+    const next = facingRef.current === 'environment' ? 'user' : 'environment'
+    await stopScanner()
+    await startScanner(next)
   }
 
   async function handleScan(text) {
@@ -188,13 +213,14 @@ export default function Gate() {
           <div style={{ fontSize: 13, color: '#6b6b6b', marginBottom: 14 }}>
             Point the camera at a guest pass QR code
           </div>
-          <button className="btn-primary" onClick={startScanner}>Start QR Scanner</button>
+          <button className="btn-primary" onClick={() => startScanner()}>Start QR Scanner</button>
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div id="qr-reader" style={{ width: '100%' }} />
-          <div style={{ padding: 12 }}>
-            <button className="btn-secondary" style={{ width: '100%', textAlign: 'center' }} onClick={stopScanner}>Cancel scan</button>
+          <div style={{ padding: 12, display: 'flex', gap: 8 }}>
+            <button className="btn-secondary" style={{ flex: 1, textAlign: 'center' }} onClick={flipCamera}>🔄 Flip Camera</button>
+            <button className="btn-secondary" style={{ flex: 1, textAlign: 'center' }} onClick={stopScanner}>✕ Stop Camera</button>
           </div>
         </div>
       )}
