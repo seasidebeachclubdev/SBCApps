@@ -36,9 +36,22 @@ export default function Swap() {
 
   async function claimShift(shift) {
     if (shift.employee_id === employee.id) return
+    // no double-booking: the claim must not overlap a shift you already work
+    const conflict = myShifts.find(s =>
+      s.shift_date === shift.shift_date &&
+      s.start_time < shift.end_time && s.end_time > shift.start_time
+    )
+    if (conflict) {
+      setToast(`Conflicts with your ${conflict.start_time}–${conflict.end_time} shift that day`)
+      setTimeout(() => setToast(''), 4000)
+      return
+    }
     setSaving(true)
     const { error } = await supabase.from('shifts').update({ status: 'picked_up', picked_up_by: employee.id, approved: false }).eq('id', shift.id)
-    setToast(error ? 'Could not claim shift — try again' : 'Shift claimed — awaiting manager approval')
+    // the database enforces the same rule; surface its message if it fires
+    setToast(error
+      ? (error.message?.includes('time conflict') ? 'Conflicts with a shift you already work that day' : 'Could not claim shift — try again')
+      : 'Shift claimed — awaiting manager approval')
     fetchData()
     setTimeout(() => setToast(''), 3000)
     setSaving(false)

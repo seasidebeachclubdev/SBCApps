@@ -6,8 +6,10 @@ import Schedule from './screens/Schedule'
 import Clock from './screens/Clock'
 import Swap from './screens/Swap'
 import Pay from './screens/Pay'
+import Gate from './screens/Gate'
 
 const TITLES = {
+  '/gate':     'Gate Check-In',
   '/schedule': 'My Schedule',
   '/clock':    'Time Clock',
   '/swap':     'Shift Swap',
@@ -22,10 +24,15 @@ const NAV_TABS = [
 ]
 
 function NavBar() {
+  const { employee } = useAuth()
   const location = useLocation()
+  // gate staff get the scanner as their first tab
+  const tabs = employee?.role === 'gate_device'
+    ? [{ path: '/gate', icon: '🚪', label: 'Gate' }, ...NAV_TABS]
+    : NAV_TABS
   return (
     <div className="bottom-nav">
-      {NAV_TABS.map(t => (
+      {tabs.map(t => (
         <div key={t.path} className={`nav-item ${location.pathname === t.path ? 'active' : ''}`} onClick={() => window.location.href = t.path}>
           <span className="icon">{t.icon}</span>
           <span className="label">{t.label}</span>
@@ -73,15 +80,18 @@ function NoAccount({ message }) {
 }
 
 function ProtectedLayout() {
+  const { employee } = useAuth()
+  const isGate = employee?.role === 'gate_device'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <TopBar />
       <Routes>
+        <Route path="/gate"     element={isGate ? <Gate /> : <Navigate to="/schedule" replace />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/clock"    element={<Clock />} />
         <Route path="/swap"     element={<Swap />} />
         <Route path="/pay"      element={<Pay />} />
-        <Route path="*"         element={<Navigate to="/schedule" replace />} />
+        <Route path="*"         element={<Navigate to={isGate ? '/gate' : '/schedule'} replace />} />
       </Routes>
       <NavBar />
     </div>
