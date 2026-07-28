@@ -26,6 +26,7 @@ export default function Gate() {
   const [scannerActive, setScannerActive] = useState(false)
   const [camStatus, setCamStatus] = useState('idle') // idle | starting | live
   const [camError, setCamError] = useState('')
+  const [camInfo, setCamInfo] = useState('') // what the camera reports, shown under the preview
   const scannerRef = useRef(null)
   const facingRef = useRef('environment') // back camera first
   const startSeq = useRef(0) // invalidates an in-flight start when Stop is hit
@@ -65,18 +66,18 @@ export default function Gate() {
     setScannerActive(true)
     setCamStatus('starting')
     setCamError('')
+    setCamInfo('')
     const { Html5Qrcode } = await import('html5-qrcode')
     // the container renders with scannerActive; wait for it to exist
     for (let i = 0; i < 20 && !document.getElementById('qr-reader'); i++)
       await new Promise(r => setTimeout(r, 50))
+    let scanner = null
     try {
       if (seq !== startSeq.current) return
       if (!document.getElementById('qr-reader')) throw new Error('scanner container missing')
       if (!navigator.mediaDevices?.getUserMedia)
         throw Object.assign(new Error('no camera API'), { name: 'NotFoundError' })
-      // exactly one camera stream is opened, by html5-qrcode itself:
-      // opening a second one to pre-check permission can hang iOS Safari
-      const scanner = new Html5Qrcode('qr-reader')
+      scanner = new Html5Qrcode('qr-reader')
       scannerRef.current = scanner
       facingRef.current = mode
       const config = {
@@ -89,19 +90,45 @@ export default function Gate() {
         await stopScanner()
         await handleScan(decodedText)
       }
-      try {
-        await scanner.start({ facingMode: mode }, config, onScan, () => {})
-      } catch (e1) {
-        if (e1?.name === 'NotAllowedError') throw e1
-        // some devices reject facingMode constraints; use any camera
-        const cams = await Html5Qrcode.getCameras()
-        if (!cams?.length) throw Object.assign(new Error('No camera found'), { name: 'NotFoundError' })
-        const cam = cams.find(c => /back|rear|environment/i.test(c.label)) ?? cams[0]
-        await scanner.start(cam.id, config, onScan, () => {})
+      // Start by explicit device id first: that is what the old camera
+      // picker did, and some iPhones hand back a black stream when asked
+      // for a bare {facingMode} constraint instead.
+      let cams = []
+      try { cams = await Html5Qrcode.getCameras() } catch (e) { if (e?.name === 'NotAllowedError') throw e }
+      if (seq !== startSeq.current) { try { await scanner.stop() } catch {}; return }
+      const rear = cams.find(c => /back|rear|environment/i.test(c.label))
+      const front = cams.find(c => /front|user|face/i.test(c.label))
+      const pick = mode === 'user' ? (front ?? cams[0]) : (rear ?? cams[cams.length - 1])
+      // never hang forever on a camera that refuses to produce frames
+      const withTimeout = p => Promise.race([p, new Promise((_, rej) =>
+        setTimeout(() => rej(Object.assign(new Error('camera timed out'), { name: 'TimeoutError' })), 15000))])
+      if (pick) {
+        try {
+          await withTimeout(scanner.start(pick.id, config, onScan, () => {}))
+        } catch (e1) {
+          if (e1?.name === 'NotAllowedError') throw e1
+          await withTimeout(scanner.start({ facingMode: mode }, config, onScan, () => {}))
+        }
+      } else {
+        await withTimeout(scanner.start({ facingMode: mode }, config, onScan, () => {}))
       }
       if (seq !== startSeq.current) { try { await scanner.stop() } catch {}; return }
       setCamStatus('live')
+      // report what the camera is actually delivering; a black preview
+      // shows up here as 0x0 or a paused video
+      setTimeout(() => {
+        if (seq !== startSeq.current) return
+        const v = document.querySelector('#qr-reader video')
+        const track = v?.srcObject?.getVideoTracks?.()[0]
+        const dims = `${v?.videoWidth ?? 0}x${v?.videoHeight ?? 0}`
+        const label = (track?.label || 'camera').slice(0, 28)
+        setCamInfo(`${label} · ${dims}${v?.paused ? ' · paused' : ''}`)
+        if (!v || !v.videoWidth || v.paused) {
+          setCamError(`The camera opened but is not sending a picture (${dims}${v?.paused ? ', paused' : ''}). Try Flip Camera, or close other apps using the camera.`)
+        }
+      }, 3500)
     } catch (e) {
+      if (scanner) { try { await scanner.stop() } catch {} }
       if (seq !== startSeq.current) return
       scannerRef.current = null
       setScannerActive(false)
@@ -112,7 +139,9 @@ export default function Gate() {
           ? 'Camera access is blocked for this site. Allow the camera in your browser settings, then try again.'
           : name === 'NotFoundError'
             ? 'No camera was found on this device.'
-            : `Could not start the camera (${name || e?.message || 'unknown error'}).`
+            : name === 'TimeoutError'
+              ? 'The camera did not respond. Close any other app using the camera and try again.'
+              : `Could not start the camera (${name || e?.message || 'unknown error'}).`
       )
     }
   }
@@ -123,6 +152,7 @@ export default function Gate() {
     scannerRef.current = null
     setScannerActive(false)
     setCamStatus('idle')
+    setCamInfo('')
     if (scanner) {
       try { await scanner.stop() } catch {}
       try { scanner.clear() } catch {}
@@ -264,6 +294,9 @@ export default function Gate() {
             <div style={{ textAlign: 'center', padding: '20px 12px', fontSize: 13, color: '#6b6b6b' }}>
               Starting camera… allow access if prompted.
             </div>
+          )}
+          {camInfo && (
+            <div style={{ textAlign: 'center', padding: '6px 12px 0', fontSize: 10, color: '#6b6b6b' }}>{camInfo}</div>
           )}
           <div style={{ padding: 12, display: 'flex', gap: 8 }}>
             <button className="btn-secondary" style={{ flex: 1, textAlign: 'center' }} onClick={flipCamera}>🔄 Flip Camera</button>
