@@ -1,6 +1,6 @@
 // Gate check-in for gate-role staff - same flow as the admin dashboard's
-// Gate screen: scan a pass (or search a member), verify against the
-// database, enforce the 4-visit rule, admit, notify the member.
+// Gate screen: scan a pass (or look the member up by name), verify against
+// the database, enforce the 4-visit rule, admit, notify the member.
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -24,24 +24,24 @@ export default function Gate() {
   const [recentCheckins, setRecentCheckins] = useState([])
   const [toast, setToast] = useState('')
   const [scannerActive, setScannerActive] = useState(false)
-  const [camStatus, setCamStatus] = useState('idle') // idle | starting | live
-  const [camError, setCamError] = useState('')
-  const [camInfo, setCamInfo] = useState('') // what the camera reports, shown under the preview
+  const [member, setMember] = useState(null)      // member opened from search
+  const [memberGuests, setMemberGuests] = useState([])
+  const [loadingGuests, setLoadingGuests] = useState(false)
   const scannerRef = useRef(null)
-  const facingRef = useRef('environment') // back camera first
-  const startSeq = useRef(0) // invalidates an in-flight start when Stop is hit
 
   const today = localDateStr()
 
   useEffect(() => {
     fetchRecentCheckins()
-    return () => stopScanner()
+    return () => { stopScanner() }
   }, [])
 
   useEffect(() => {
     if (search.length > 1) searchMembers()
     else setSearchResults([])
   }, [search])
+
+  function flash(msg, ms = 3000) { setToast(msg); setTimeout(() => setToast(''), ms) }
 
   async function fetchRecentCheckins() {
     const { data } = await supabase
@@ -59,119 +59,44 @@ export default function Gate() {
     setSearchResults(data || [])
   }
 
-  // Direct camera control (no Html5QrcodeScanner widget: it remembers the
-  // first camera choice in localStorage and auto-starts with it forever).
-  async function startScanner(mode = 'environment') {
-    const seq = ++startSeq.current
+  // ---------- scanner ----------
+  // Html5QrcodeScanner renders its own camera picker and start/stop UI.
+  // rememberLastUsedCamera:false (plus clearing the stored key) keeps the
+  // front/back picker available on every scan instead of only the first.
+  async function startScanner() {
     setScannerActive(true)
-    setCamStatus('starting')
-    setCamError('')
-    setCamInfo('')
-    const { Html5Qrcode } = await import('html5-qrcode')
-    // the container renders with scannerActive; wait for it to exist
+    const { Html5QrcodeScanner } = await import('html5-qrcode')
+    try { localStorage.removeItem('HTML5_QRCODE_DATA') } catch {}
     for (let i = 0; i < 20 && !document.getElementById('qr-reader'); i++)
       await new Promise(r => setTimeout(r, 50))
-    let scanner = null
-    try {
-      if (seq !== startSeq.current) return
-      if (!document.getElementById('qr-reader')) throw new Error('scanner container missing')
-      if (!navigator.mediaDevices?.getUserMedia)
-        throw Object.assign(new Error('no camera API'), { name: 'NotFoundError' })
-      scanner = new Html5Qrcode('qr-reader')
-      scannerRef.current = scanner
-      facingRef.current = mode
-      const config = {
-        fps: 10,
-        // never larger than the video, or start() throws on narrow screens
-        qrbox: (w, h) => { const s = Math.max(140, Math.floor(Math.min(w, h) * 0.7)); return { width: s, height: s } },
-      }
-      const onScan = async (decodedText) => {
-        if (scannerRef.current !== scanner) return // already stopping
+    if (!document.getElementById('qr-reader')) { setScannerActive(false); return }
+    const scanner = new Html5QrcodeScanner('qr-reader', {
+      fps: 10,
+      // a fixed box can exceed a 16:9 preview on a phone and refuse to start
+      qrbox: (w, h) => { const s = Math.max(140, Math.floor(Math.min(w, h) * 0.7)); return { width: s, height: s } },
+      rememberLastUsedCamera: false,
+      showTorchButtonIfSupported: true,
+    }, false)
+    scannerRef.current = scanner
+    scanner.render(
+      async (decodedText) => {
         await stopScanner()
         await handleScan(decodedText)
-      }
-      // Start by explicit device id first: that is what the old camera
-      // picker did, and some iPhones hand back a black stream when asked
-      // for a bare {facingMode} constraint instead.
-      let cams = []
-      try { cams = await Html5Qrcode.getCameras() } catch (e) { if (e?.name === 'NotAllowedError') throw e }
-      if (seq !== startSeq.current) { try { await scanner.stop() } catch {}; return }
-      const rear = cams.find(c => /back|rear|environment/i.test(c.label))
-      const front = cams.find(c => /front|user|face/i.test(c.label))
-      const pick = mode === 'user' ? (front ?? cams[0]) : (rear ?? cams[cams.length - 1])
-      // never hang forever on a camera that refuses to produce frames
-      const withTimeout = p => Promise.race([p, new Promise((_, rej) =>
-        setTimeout(() => rej(Object.assign(new Error('camera timed out'), { name: 'TimeoutError' })), 15000))])
-      if (pick) {
-        try {
-          await withTimeout(scanner.start(pick.id, config, onScan, () => {}))
-        } catch (e1) {
-          if (e1?.name === 'NotAllowedError') throw e1
-          await withTimeout(scanner.start({ facingMode: mode }, config, onScan, () => {}))
-        }
-      } else {
-        await withTimeout(scanner.start({ facingMode: mode }, config, onScan, () => {}))
-      }
-      if (seq !== startSeq.current) { try { await scanner.stop() } catch {}; return }
-      setCamStatus('live')
-      // report what the camera is actually delivering; a black preview
-      // shows up here as 0x0 or a paused video
-      setTimeout(() => {
-        if (seq !== startSeq.current) return
-        const v = document.querySelector('#qr-reader video')
-        const track = v?.srcObject?.getVideoTracks?.()[0]
-        const dims = `${v?.videoWidth ?? 0}x${v?.videoHeight ?? 0}`
-        const label = (track?.label || 'camera').slice(0, 28)
-        setCamInfo(`${label} · ${dims}${v?.paused ? ' · paused' : ''}`)
-        if (!v || !v.videoWidth || v.paused) {
-          setCamError(`The camera opened but is not sending a picture (${dims}${v?.paused ? ', paused' : ''}). Try Flip Camera, or close other apps using the camera.`)
-        }
-      }, 3500)
-    } catch (e) {
-      if (scanner) { try { await scanner.stop() } catch {} }
-      if (seq !== startSeq.current) return
-      scannerRef.current = null
-      setScannerActive(false)
-      setCamStatus('idle')
-      const name = e?.name || ''
-      setCamError(
-        name === 'NotAllowedError'
-          ? 'Camera access is blocked for this site. Allow the camera in your browser settings, then try again.'
-          : name === 'NotFoundError'
-            ? 'No camera was found on this device.'
-            : name === 'TimeoutError'
-              ? 'The camera did not respond. Close any other app using the camera and try again.'
-              : `Could not start the camera (${name || e?.message || 'unknown error'}).`
-      )
-    }
+      },
+      () => {} // per-frame decode misses are normal
+    )
   }
 
   async function stopScanner() {
-    startSeq.current++ // cancel any start still in flight
     const scanner = scannerRef.current
     scannerRef.current = null
     setScannerActive(false)
-    setCamStatus('idle')
-    setCamInfo('')
-    if (scanner) {
-      try { await scanner.stop() } catch {}
-      try { scanner.clear() } catch {}
-    }
-  }
-
-  async function flipCamera() {
-    const next = facingRef.current === 'environment' ? 'user' : 'environment'
-    await stopScanner()
-    await startScanner(next)
+    if (scanner) { try { await scanner.clear() } catch {} }
   }
 
   async function handleScan(text) {
     const parts = text.split('|')
-    if (parts[0] !== 'SBCRI' || parts.length < 5) {
-      setToast('Invalid QR code')
-      setTimeout(() => setToast(''), 3000)
-      return
-    }
+    if (parts[0] !== 'SBCRI' || parts.length < 5) return flash('Invalid QR code')
     const [, guestId] = parts
 
     // identity comes from the database row, not the QR text
@@ -180,24 +105,19 @@ export default function Gate() {
       .select('id, guest_name, email, phone, visit_date, member_id')
       .eq('id', guestId)
       .maybeSingle()
-    if (!guest) {
-      setToast('Pass not found - verify the guest at the desk')
-      setTimeout(() => setToast(''), 4000)
-      return
-    }
+    if (!guest) return flash('Pass not found - verify the guest at the desk', 4000)
+    await verifyGuest(guest)
+  }
 
+  // shared by the scanner and by picking a pass from the member's list
+  async function verifyGuest(guest) {
     const visitCount = await checkGuestVisits(guest.guest_name, guest.email, guest.phone)
-    if (visitCount === null) {
-      setToast('Could not verify visit count - try again')
-      setTimeout(() => setToast(''), 3000)
-      return
-    }
+    if (visitCount === null) return flash('Could not verify visit count - try again')
     if (visitCount > 4) {
       setBlocked(true)
       setBlockedName(guest.guest_name)
       return
     }
-
     setScanResult({
       type: 'guest',
       guestId: guest.id,
@@ -208,10 +128,25 @@ export default function Gate() {
     })
   }
 
-  async function selectMember(member) {
+  // ---------- member lookup ----------
+  async function openMember(m) {
     setSearch('')
     setSearchResults([])
-    setScanResult({ type: 'member', member })
+    setMember(m)
+    setLoadingGuests(true)
+    const { data } = await supabase
+      .from('guests')
+      .select('id, guest_name, email, phone, visit_date, fee, paid, checked_in_by, member_id')
+      .eq('member_id', m.member_id)
+      .order('created_at', { ascending: false })
+      .limit(30)
+    setMemberGuests(data || [])
+    setLoadingGuests(false)
+  }
+
+  function closeMember() {
+    setMember(null)
+    setMemberGuests([])
   }
 
   async function admitGuest() {
@@ -220,20 +155,22 @@ export default function Gate() {
       const { error } = await supabase.from('guests')
         .update({ checked_in_by: employee.name, visit_date: today })
         .eq('id', scanResult.guestId)
-      if (error) {
-        setToast('Check-in failed — try again')
-        setTimeout(() => setToast(''), 3000)
-        return
-      }
+      if (error) return flash('Check-in failed — try again')
       await supabase.functions.invoke('send-checkin-sms', {
         body: { guest_name: scanResult.guestName, member_id: scanResult.memberId }
       })
     }
     setScanResult(null)
-    setToast('Check-in recorded — member notified')
+    closeMember()
+    flash('Check-in recorded — member notified')
     fetchRecentCheckins()
-    setTimeout(() => setToast(''), 3000)
   }
+
+  const fmtDate = d => d
+    ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+    : 'No date set'
+  const unusedPasses = memberGuests.filter(g => !g.checked_in_by)
+  const usedPasses = memberGuests.filter(g => g.checked_in_by)
 
   return (
     <div className="screen">
@@ -247,15 +184,6 @@ export default function Gate() {
       )}
 
       {toast && <div className="success-box">✓ {toast}</div>}
-
-      {camError && (
-        <div className="error-box">
-          <strong>📷 Camera problem</strong><br />
-          {camError}
-          <br /><br />
-          <button className="btn-secondary" onClick={() => setCamError('')}>Dismiss</button>
-        </div>
-      )}
 
       {scanResult ? (
         <div className="card" style={{ textAlign: 'center', border: '1px solid #5dcaa5' }}>
@@ -279,70 +207,131 @@ export default function Gate() {
             <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setScanResult(null)}>Cancel</button>
           </div>
         </div>
+      ) : member ? (
+        <>
+          <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button className="btn-secondary" style={{ padding: '6px 10px' }} onClick={closeMember}>‹ Back</button>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{member.first_name} {member.last_name}</div>
+              <div style={{ fontSize: 11, color: '#6b6b6b' }}>{member.member_id} · {member.membership_type}</div>
+            </div>
+          </div>
+          <div className="card">
+            <button className="btn-primary" onClick={() => setScanResult({ type: 'member', member })}>
+              Admit Member
+            </button>
+          </div>
+
+          <div className="section-label">Guest passes</div>
+          {loadingGuests ? (
+            <div className="card" style={{ textAlign: 'center', fontSize: 13, color: '#6b6b6b', padding: 16 }}>Loading…</div>
+          ) : unusedPasses.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', fontSize: 13, color: '#6b6b6b', padding: 16 }}>
+              No unused guest passes for this member.
+            </div>
+          ) : (
+            <div className="list-card">
+              {unusedPasses.map(g => (
+                <div key={g.id} className="list-item">
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{g.guest_name}</div>
+                    <div style={{ fontSize: 11, color: '#6b6b6b' }}>
+                      {fmtDate(g.visit_date)} · ${g.fee ?? 35}{' '}
+                      <span className={`badge ${g.paid ? 'badge-green' : 'badge-amber'}`} style={{ marginLeft: 4 }}>
+                        {g.paid ? 'Paid' : 'Unpaid'}
+                      </span>
+                    </div>
+                  </div>
+                  <button className="btn-teal" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => verifyGuest(g)}>
+                    Check In
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {usedPasses.length > 0 && (
+            <>
+              <div className="section-label">Already used</div>
+              <div className="list-card">
+                {usedPasses.slice(0, 5).map(g => (
+                  <div key={g.id} className="list-item">
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500 }}>{g.guest_name}</div>
+                      <div style={{ fontSize: 11, color: '#6b6b6b' }}>{fmtDate(g.visit_date)} · by {g.checked_in_by}</div>
+                    </div>
+                    <span className="badge badge-green">In</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
       ) : !scannerActive ? (
         <div className="card" style={{ textAlign: 'center', padding: 24 }}>
           <div style={{ fontSize: 40, marginBottom: 8 }}>📷</div>
           <div style={{ fontSize: 13, color: '#6b6b6b', marginBottom: 14 }}>
-            Point the camera at a guest pass QR code
+            Scan a guest pass QR code, or find the member by name below
           </div>
-          <button className="btn-primary" onClick={() => startScanner()}>Start QR Scanner</button>
+          <button className="btn-primary" onClick={startScanner}>Start QR Scanner</button>
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div id="qr-reader" style={{ width: '100%' }} />
-          {camStatus === 'starting' && (
-            <div style={{ textAlign: 'center', padding: '20px 12px', fontSize: 13, color: '#6b6b6b' }}>
-              Starting camera… allow access if prompted.
-            </div>
-          )}
-          {camInfo && (
-            <div style={{ textAlign: 'center', padding: '6px 12px 0', fontSize: 10, color: '#6b6b6b' }}>{camInfo}</div>
-          )}
-          <div style={{ padding: 12, display: 'flex', gap: 8 }}>
-            <button className="btn-secondary" style={{ flex: 1, textAlign: 'center' }} onClick={flipCamera}>🔄 Flip Camera</button>
-            <button className="btn-secondary" style={{ flex: 1, textAlign: 'center' }} onClick={stopScanner}>✕ Stop Camera</button>
+          <div style={{ padding: 12 }}>
+            <button className="btn-secondary" style={{ width: '100%', textAlign: 'center' }} onClick={stopScanner}>
+              ✕ Close Camera
+            </button>
           </div>
         </div>
       )}
 
-      <div className="section-label">Manual search</div>
-      <div style={{ padding: '0 16px' }}>
-        <input
-          type="text"
-          placeholder="Member name or ID..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-      </div>
-      {searchResults.length > 0 && (
-        <div className="list-card">
-          {searchResults.map(m => (
-            <div key={m.member_id} className="list-item">
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>{m.first_name} {m.last_name}</div>
-                <div style={{ fontSize: 11, color: '#6b6b6b' }}>{m.member_id} · {m.membership_type}</div>
-              </div>
-              <button className="btn-teal" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => selectMember(m)}>Select</button>
+      {!member && !scanResult && (
+        <>
+          <div className="section-label">Find a member</div>
+          <div style={{ padding: '0 16px' }}>
+            <input
+              type="text"
+              placeholder="Member name or ID..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          {searchResults.length > 0 && (
+            <div className="list-card">
+              {searchResults.map(m => (
+                <div key={m.member_id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => openMember(m)}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{m.first_name} {m.last_name}</div>
+                    <div style={{ fontSize: 11, color: '#6b6b6b' }}>{m.member_id} · {m.membership_type}</div>
+                  </div>
+                  <span style={{ fontSize: 12, color: '#6b6b6b' }}>Guest passes ›</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
-      <div className="section-label">Recent today</div>
-      {recentCheckins.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', fontSize: 13, color: '#6b6b6b', padding: 16 }}>No check-ins yet.</div>
-      ) : (
-        <div className="list-card">
-          {recentCheckins.map((c, i) => (
-            <div key={i} className="list-item">
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>{c.guest_name}</div>
-                <div style={{ fontSize: 11, color: '#6b6b6b' }}>Guest of {c.member_name}</div>
-              </div>
-              <span className="badge badge-green">In</span>
+      {!member && !scanResult && (
+        <>
+          <div className="section-label">Recent today</div>
+          {recentCheckins.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', fontSize: 13, color: '#6b6b6b', padding: 16 }}>No check-ins yet.</div>
+          ) : (
+            <div className="list-card">
+              {recentCheckins.map((c, i) => (
+                <div key={i} className="list-item">
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{c.guest_name}</div>
+                    <div style={{ fontSize: 11, color: '#6b6b6b' }}>Guest of {c.member_name}</div>
+                  </div>
+                  <span className="badge badge-green">In</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   )
