@@ -69,7 +69,11 @@ export default function Employees() {
   const futureDays = []
   for (let i = 0; i < 14; i++) { const d = new Date(); d.setDate(d.getDate() + i); futureDays.push(localDateStr(d)) }
 
-  const recFor = (emp, date) => emp.clock_records?.find(r => r.shift_date === date)
+  // multiple punches per day are allowed (split shifts)
+  const recsFor = (emp, date) => (emp.clock_records || [])
+    .filter(r => r.shift_date === date)
+    .sort((a, b) => (a.clock_in || '').localeCompare(b.clock_in || ''))
+  const openRecFor = (emp, date) => recsFor(emp, date).find(r => r.clock_in && !r.clock_out)
   const shiftFor = (emp, date) => emp.shifts?.find(s => s.shift_date === date)
   const hrs = r => (r?.clock_in && r?.clock_out) ? roundHours((new Date(r.clock_out) - new Date(r.clock_in)) / 3600000) : null
   const fmtT = ts => ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'
@@ -80,23 +84,25 @@ export default function Employees() {
   function flash(msg) { setToast(msg); setTimeout(() => setToast(''), 3500) }
 
   // ---------- time clock overrides ----------
-  function startClockEdit(date, rec) {
-    setEditDay(date)
+  // editDay identifies a specific punch (record id) or a new one for a date
+  function startClockEdit(key, rec) {
+    setEditDay(key)
     setClockForm({ in: toInput(rec?.clock_in), out: toInput(rec?.clock_out), note: '' })
   }
 
-  async function saveClockEdit(date) {
+  async function saveClockEdit(date, rec) {
     if (!clockForm.note.trim()) return flash('A reason is required for time overrides')
     if (clockForm.in && clockForm.out && clockForm.out <= clockForm.in) return flash('Clock-out must be after clock-in')
     setBusy(true)
-    const { error } = await supabase.from('clock_records').upsert({
-      employee_id: selected.id,
-      shift_date: date,
+    const payload = {
       clock_in: clockForm.in ? new Date(`${date}T${clockForm.in}:00`).toISOString() : null,
       clock_out: clockForm.out ? new Date(`${date}T${clockForm.out}:00`).toISOString() : null,
       override_by: admin.id,
       override_note: clockForm.note.trim(),
-    }, { onConflict: 'employee_id,shift_date' })
+    }
+    const { error } = rec
+      ? await supabase.from('clock_records').update(payload).eq('id', rec.id)
+      : await supabase.from('clock_records').insert({ employee_id: selected.id, shift_date: date, ...payload })
     setBusy(false)
     if (error) return flash('Could not save override — try again')
     setEditDay(null)
@@ -265,7 +271,24 @@ export default function Employees() {
 
   // ================= detail =================
   if (selected) {
-    const total = pastDays.reduce((a, d) => a + (hrs(recFor(selected, d)) ?? 0), 0)
+    const total = pastDays.reduce((a, d) => a + recsFor(selected, d).reduce((x, r) => x + (hrs(r) ?? 0), 0), 0)
+
+    const clockEditForm = (date, rec) => (
+      <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div className="fg"><label className="fl">Clock in</label>
+            <input type="time" value={clockForm.in} onChange={e => setClockForm({ ...clockForm, in: e.target.value })} /></div>
+          <div className="fg"><label className="fl">Clock out</label>
+            <input type="time" value={clockForm.out} onChange={e => setClockForm({ ...clockForm, out: e.target.value })} /></div>
+        </div>
+        <div className="fg"><label className="fl">Reason (required, kept on record)</label>
+          <input type="text" placeholder="e.g. forgot to clock out" value={clockForm.note} onChange={e => setClockForm({ ...clockForm, note: e.target.value })} /></div>
+        {rec?.override_note && <div style={{ fontSize: 11, color: '#6b6b6b' }}>Last adjustment: {rec.override_note}</div>}
+        <button className="btn-teal" disabled={busy} onClick={() => saveClockEdit(date, rec)}>
+          {busy ? 'Saving…' : 'Save Override'}
+        </button>
+      </div>
+    )
     return (
       <div className="screen">
         {toast && <div className="success-box">✓ {toast}</div>}
@@ -297,44 +320,42 @@ export default function Employees() {
             </div>
             <div className="list-card">
               {pastDays.map(date => {
-                const rec = recFor(selected, date)
-                const h = hrs(rec)
-                const editing = editDay === date
+                const recs = recsFor(selected, date)
+                const dayTotal = recs.reduce((a, r) => a + (hrs(r) ?? 0), 0)
+                const addKey = `new-${date}`
                 return (
                   <div key={date} style={{ borderBottom: '1px solid #e0e0e0' }}>
-                    <div className="list-item" style={{ borderBottom: 'none' }}>
-                      <div style={{ width: 86, flexShrink: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: date === today ? 600 : 500 }}>{dayLabel(date)}</div>
-                        {rec?.override_note && <div style={{ fontSize: 10, color: '#c98a1b' }}>✏️ adjusted</div>}
+                    <div className="list-item" style={{ borderBottom: 'none', alignItems: 'flex-start' }}>
+                      <div style={{ width: 86, flexShrink: 0, fontSize: 12, fontWeight: date === today ? 600 : 500 }}>
+                        {dayLabel(date)}
+                        {dayTotal > 0 && <div style={{ fontSize: 11, color: '#6b6b6b', fontWeight: 600 }}>{Math.round(dayTotal * 100) / 100} hrs</div>}
                       </div>
-                      <div style={{ flex: 1, fontSize: 12, color: rec ? '#1a1a1a' : '#6b6b6b' }}>
-                        {rec ? `${fmtT(rec.clock_in)} – ${fmtT(rec.clock_out)}` : 'No record'}
-                        {rec?.note && <div style={{ fontSize: 11, color: '#2f6e78' }}>📝 {rec.note}</div>}
-                      </div>
-                      <div style={{ width: 52, fontSize: 12, fontWeight: 600, textAlign: 'right' }}>
-                        {h != null ? `${h} hrs` : rec?.clock_in ? 'open' : ''}
+                      <div style={{ flex: 1 }}>
+                        {recs.length === 0 && <div style={{ fontSize: 12, color: '#6b6b6b' }}>No record</div>}
+                        {recs.map(rec => (
+                          <div key={rec.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 2 }}>
+                            <span style={{ flex: 1 }}>
+                              {fmtT(rec.clock_in)} – {fmtT(rec.clock_out)}
+                              {rec.override_note && <span title={rec.override_note} style={{ color: '#c98a1b' }}> ✏️</span>}
+                            </span>
+                            <span style={{ fontWeight: 600 }}>{hrs(rec) != null ? `${hrs(rec)}h` : rec.clock_in ? 'open' : ''}</span>
+                            <button className="btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }}
+                              onClick={() => (editDay === rec.id ? setEditDay(null) : startClockEdit(rec.id, rec))}>
+                              {editDay === rec.id ? 'Cancel' : 'Edit'}
+                            </button>
+                          </div>
+                        ))}
+                        {recs.some(r => r.note) && (
+                          <div style={{ fontSize: 11, color: '#2f6e78' }}>📝 {recs.map(r => r.note).filter(Boolean).join(' · ')}</div>
+                        )}
                       </div>
                       <button className="btn-secondary" style={{ fontSize: 11, padding: '4px 8px', marginLeft: 8 }}
-                        onClick={() => (editing ? setEditDay(null) : startClockEdit(date, rec))}>
-                        {editing ? 'Cancel' : rec ? 'Edit' : 'Add'}
+                        onClick={() => (editDay === addKey ? setEditDay(null) : startClockEdit(addKey, null))}>
+                        {editDay === addKey ? 'Cancel' : recs.length ? '+' : 'Add'}
                       </button>
                     </div>
-                    {editing && (
-                      <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                          <div className="fg"><label className="fl">Clock in</label>
-                            <input type="time" value={clockForm.in} onChange={e => setClockForm({ ...clockForm, in: e.target.value })} /></div>
-                          <div className="fg"><label className="fl">Clock out</label>
-                            <input type="time" value={clockForm.out} onChange={e => setClockForm({ ...clockForm, out: e.target.value })} /></div>
-                        </div>
-                        <div className="fg"><label className="fl">Reason (required, kept on record)</label>
-                          <input type="text" placeholder="e.g. forgot to clock out" value={clockForm.note} onChange={e => setClockForm({ ...clockForm, note: e.target.value })} /></div>
-                        {rec?.override_note && <div style={{ fontSize: 11, color: '#6b6b6b' }}>Last adjustment: {rec.override_note}</div>}
-                        <button className="btn-teal" disabled={busy} onClick={() => saveClockEdit(date)}>
-                          {busy ? 'Saving…' : 'Save Override'}
-                        </button>
-                      </div>
-                    )}
+                    {recs.map(rec => (editDay === rec.id ? <div key={`f-${rec.id}`}>{clockEditForm(date, rec)}</div> : null))}
+                    {editDay === addKey && clockEditForm(date, null)}
                   </div>
                 )
               })}
@@ -436,7 +457,7 @@ export default function Employees() {
   }
 
   // ================= list =================
-  const onDuty = employees.filter(e => { const r = recFor(e, today); return r?.clock_in && !r?.clock_out })
+  const onDuty = employees.filter(e => openRecFor(e, today))
 
   return (
     <div className="screen">
@@ -495,7 +516,7 @@ export default function Employees() {
             <div key={emp.id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => { setSelectedId(emp.id); setView('clock') }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{emp.name}</div>
-                <div style={{ fontSize: 11, color: '#6b6b6b' }}>{roleLabelOf(emp)} · in {fmtT(recFor(emp, today)?.clock_in)}</div>
+                <div style={{ fontSize: 11, color: '#6b6b6b' }}>{roleLabelOf(emp)} · in {fmtT(openRecFor(emp, today)?.clock_in)}</div>
               </div>
               <span className="badge badge-green">On</span>
             </div>
@@ -536,8 +557,7 @@ export default function Employees() {
       <div className="section-label">All staff · tap for hours &amp; schedule</div>
       <div className="list-card">
         {employees.map(emp => {
-          const todayRecord = recFor(emp, today)
-          const isClockedIn = todayRecord?.clock_in && !todayRecord?.clock_out
+          const isClockedIn = !!openRecFor(emp, today)
           return (
             <div key={emp.id} className="list-item" style={{ cursor: 'pointer' }} onClick={() => { setSelectedId(emp.id); setView('clock') }}>
               <div style={{ flex: 1 }}>
