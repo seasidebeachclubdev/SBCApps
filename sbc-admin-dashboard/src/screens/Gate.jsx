@@ -17,8 +17,7 @@ async function checkGuestVisits(guestName, email, phone) {
 export default function Gate() {
   const { admin } = useAuth()
   const [scanResult, setScanResult] = useState(null)
-  const [blocked, setBlocked] = useState(false)
-  const [blockedName, setBlockedName] = useState('')
+  const [blocked, setBlocked] = useState(null) // { name, reason }
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [recentCheckins, setRecentCheckins] = useState([])
@@ -62,12 +61,28 @@ export default function Gate() {
 
   // ---------- scanner ----------
   // Html5QrcodeScanner renders its own camera picker and start/stop UI.
-  // rememberLastUsedCamera:false (plus clearing the stored key) keeps the
-  // front/back picker available on every scan instead of only the first.
+  //
+  // Camera start-up is fussy here, and both of the library's stock modes are
+  // broken in their own way:
+  //   rememberLastUsedCamera:false wipes its stored permission flag, so every
+  //     scan needs "Request Camera Permissions" first - that opens the camera,
+  //     releases it, then opens it again to scan, and the second open is what
+  //     fails on iOS (the camera indicator switches on then straight off).
+  //   rememberLastUsedCamera:true auto-starts from the saved camera, and this
+  //     version races itself there: it builds the preview then immediately
+  //     removes it ("play() request was interrupted because the media was
+  //     removed from the document"). That is why it worked the first time and
+  //     never again - the first run had no saved camera to auto-start from.
+  // So: keep the remembered permission, but drop the remembered camera. The
+  // picker is shown, the camera opens once when it is tapped, and front/back
+  // is selectable every time.
   async function startScanner() {
     setScannerActive(true)
     const { Html5QrcodeScanner } = await import('html5-qrcode')
-    try { localStorage.removeItem('HTML5_QRCODE_DATA') } catch {}
+    try {
+      const saved = JSON.parse(localStorage.getItem('HTML5_QRCODE_DATA') || '{}')
+      localStorage.setItem('HTML5_QRCODE_DATA', JSON.stringify({ ...saved, lastUsedCameraId: null }))
+    } catch {}
     for (let i = 0; i < 20 && !document.getElementById('qr-reader'); i++)
       await new Promise(r => setTimeout(r, 50))
     if (!document.getElementById('qr-reader')) { setScannerActive(false); return }
@@ -75,7 +90,7 @@ export default function Gate() {
     // cropping overlay entirely and is more forgiving to aim at the gate.
     const scanner = new Html5QrcodeScanner('qr-reader', {
       fps: 10,
-      rememberLastUsedCamera: false,
+      rememberLastUsedCamera: true, // keeps the permission flag; camera id is cleared above
     }, false)
     scannerRef.current = scanner
     scanner.render(
@@ -88,6 +103,8 @@ export default function Gate() {
     // iOS renders a black box instead of the camera unless the preview is
     // explicitly inline and muted. The video element only exists once the
     // camera starts, so keep applying this while the user gets there.
+    // Attributes only: calling play() here races the library's own start and
+    // can make it drop the preview.
     clearInterval(patchRef.current)
     const started = Date.now()
     patchRef.current = setInterval(() => {
@@ -97,19 +114,21 @@ export default function Gate() {
         v.setAttribute('webkit-playsinline', 'true')
         v.setAttribute('muted', 'true')
         v.muted = true
-        if (v.paused) v.play().catch(() => {})
       }
       if (Date.now() - started > 20000) clearInterval(patchRef.current)
     }, 300)
   }
 
+  // Order matters: the library has to tear its own nodes down while
+  // #qr-reader is still mounted. Hiding the container first makes its
+  // clear() throw "removeChild ... is not an instance of Node".
   async function stopScanner() {
     clearInterval(patchRef.current)
     const scanner = scannerRef.current
     scannerRef.current = null
-    setScannerActive(false)
     if (scanner) { try { await scanner.clear() } catch {} }
     releaseCamera()
+    setScannerActive(false)
   }
 
   // Safety net: if teardown failed part way, a live track keeps the camera
@@ -129,22 +148,28 @@ export default function Gate() {
     const [, guestId] = parts
 
     // identity comes from the database row, not the QR text
+    await verifyGuest(guestId)
+  }
+
+  // Shared by the scanner and by picking a pass from the member's list.
+  // Always re-reads the pass: a list on screen can be seconds out of date,
+  // and another gate device may have used it in the meantime.
+  async function verifyGuest(guestId) {
     const { data: guest } = await supabase
       .from('guests')
-      .select('id, guest_name, email, phone, visit_date, member_id')
+      .select('id, guest_name, email, phone, visit_date, member_id, checked_in_by')
       .eq('id', guestId)
       .maybeSingle()
     if (!guest) return flash('Pass not found - verify the guest at the desk', 4000)
-    await verifyGuest(guest)
-  }
-
-  // shared by the scanner and by picking a pass from the member's list
-  async function verifyGuest(guest) {
+    // a pass is single-use: checked_in_by is stamped the first time it is used
+    if (guest.checked_in_by) {
+      setBlocked({ name: guest.guest_name, reason: `already used this pass — checked in by ${guest.checked_in_by}.` })
+      return
+    }
     const visitCount = await checkGuestVisits(guest.guest_name, guest.email, guest.phone)
     if (visitCount === null) return flash('Could not verify visit count - try again')
     if (visitCount > 4) {
-      setBlocked(true)
-      setBlockedName(guest.guest_name)
+      setBlocked({ name: guest.guest_name, reason: 'has reached the 4-visit season limit and may not be admitted.' })
       return
     }
     setScanResult({
@@ -181,11 +206,20 @@ export default function Gate() {
   async function admitGuest() {
     if (!scanResult) return
     if (scanResult.type === 'guest') {
-      // record the actual visit day so today's stats and check-in lists match
-      const { error } = await supabase.from('guests')
+      // record the actual visit day so today's stats and check-in lists match.
+      // .is('checked_in_by', null) makes this a claim: if another device got
+      // there first, no row comes back and the pass is not reused
+      const { data: claimed, error } = await supabase.from('guests')
         .update({ checked_in_by: admin.name, visit_date: today })
         .eq('id', scanResult.guestId)
+        .is('checked_in_by', null)
+        .select('id')
       if (error) return flash('Check-in failed — try again')
+      if (!claimed?.length) {
+        setScanResult(null)
+        setBlocked({ name: scanResult.guestName, reason: 'was already checked in — that pass is used.' })
+        return
+      }
       // Notify the member via Edge Function (SMS with email fallback)
       await supabase.functions.invoke('send-checkin-sms', {
         body: { guest_name: scanResult.guestName, member_id: scanResult.memberId }
@@ -208,9 +242,9 @@ export default function Gate() {
       {blocked && (
         <div className="error-box">
           <strong>⛔ Check-in blocked</strong><br />
-          <strong>{blockedName}</strong> has reached the 4-visit season limit and may not be admitted.
+          <strong>{blocked.name}</strong> {blocked.reason}
           <br /><br />
-          <button className="btn-secondary" onClick={() => { setBlocked(false); setBlockedName('') }}>Dismiss</button>
+          <button className="btn-secondary" onClick={() => setBlocked(null)}>Dismiss</button>
         </div>
       )}
 
@@ -273,7 +307,7 @@ export default function Gate() {
                       </span>
                     </div>
                   </div>
-                  <button className="btn-teal" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => verifyGuest(g)}>
+                  <button className="btn-teal" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => verifyGuest(g.id)}>
                     Check In
                   </button>
                 </div>
