@@ -16,8 +16,9 @@ export default function Payroll() {
   useEffect(() => { fetchPayroll() }, [])
 
   async function fetchPayroll() {
+    // 14-day window including today, matching the employee detail view
     const since = new Date()
-    since.setDate(since.getDate() - 14)
+    since.setDate(since.getDate() - 13)
     const { data } = await supabase
       .from('employees').select('id, name, area, clock_records!employee_id(clock_in, clock_out, shift_date)')
       .eq('active', true)

@@ -11,9 +11,9 @@ export default function Pay() {
   useEffect(() => { fetchRecords() }, [])
 
   async function fetchRecords() {
-    // Last 30 days of clock records
+    // 14-day window including today, matching the manager's payroll view
     const since = new Date()
-    since.setDate(since.getDate() - 30)
+    since.setDate(since.getDate() - 13)
     const { data } = await supabase
       .from('clock_records')
       .select('*')
@@ -39,7 +39,7 @@ export default function Pay() {
     <div className="screen">
       <div className="grid-2">
         <div className="stat-card">
-          <div className="stat-label">Hours (30 days)</div>
+          <div className="stat-label">Hours (14 days)</div>
           <div className="stat-value">{totalHours}</div>
           <div style={{ fontSize: 11, color: '#6b6b6b', marginTop: 2 }}>of {TARGET_HOURS} target</div>
         </div>

@@ -46,7 +46,7 @@ export default function Employees() {
     // clock_records and shifts each have two FKs to employees; name the join
     const [{ data }, { data: tpl }, { data: swapRows }] = await Promise.all([
       supabase.from('employees')
-        .select('*, clock_records!employee_id(id, clock_in, clock_out, shift_date, override_note, note), shifts!employee_id(id, shift_date, start_time, end_time, area, status)')
+        .select('*, clock_records!employee_id(id, clock_in, clock_out, shift_date, override_note, note), shifts!employee_id(id, shift_date, start_time, end_time, area, status, picked_up_by)')
         .eq('active', true).order('name'),
       supabase.from('schedule_templates').select('*'),
       supabase.from('shifts')
@@ -74,7 +74,10 @@ export default function Employees() {
     .filter(r => r.shift_date === date)
     .sort((a, b) => (a.clock_in || '').localeCompare(b.clock_in || ''))
   const openRecFor = (emp, date) => recsFor(emp, date).find(r => r.clock_in && !r.clock_out)
-  const shiftFor = (emp, date) => emp.shifts?.find(s => s.shift_date === date)
+  // an employee can have several shifts on one day (their own + a pickup)
+  const shiftsFor = (emp, date) => (emp.shifts || [])
+    .filter(s => s.shift_date === date)
+    .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
   const hrs = r => (r?.clock_in && r?.clock_out) ? roundHours((new Date(r.clock_out) - new Date(r.clock_in)) / 3600000) : null
   const fmtT = ts => ts ? new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'
   const fmtST = t => t ? new Date(`2000-01-01T${t}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'
@@ -111,8 +114,9 @@ export default function Employees() {
   }
 
   // ---------- schedule ----------
-  function startShiftEdit(date, shift) {
-    setShiftDay(date)
+  // shiftDay identifies a specific shift (row id) or a new one for a date
+  function startShiftEdit(key, shift) {
+    setShiftDay(key)
     setShiftForm({ start: shift?.start_time?.slice(0, 5) ?? '', end: shift?.end_time?.slice(0, 5) ?? '' })
   }
 
@@ -120,14 +124,17 @@ export default function Employees() {
     if (!shiftForm.start || !shiftForm.end) return flash('Start and end times are required')
     if (shiftForm.end <= shiftForm.start) return flash('End must be after start')
     setBusy(true)
-    const payload = { start_time: shiftForm.start, end_time: shiftForm.end, status: 'scheduled' }
+    // editing changes times only (a dropped/claimed shift keeps its state);
+    // adding creates a fresh scheduled shift
     const { error } = shift
-      ? await supabase.from('shifts').update(payload).eq('id', shift.id)
+      ? await supabase.from('shifts').update({ start_time: shiftForm.start, end_time: shiftForm.end }).eq('id', shift.id)
       : await supabase.from('shifts').insert({
           employee_id: selected.id,
           shift_date: date,
           area: selected.area,
-          ...payload,
+          start_time: shiftForm.start,
+          end_time: shiftForm.end,
+          status: 'scheduled',
         })
     setBusy(false)
     if (error) return flash('Could not save shift — try again')
@@ -174,9 +181,11 @@ export default function Employees() {
       area: selected.area,
     }, { onConflict: 'employee_id,weekday' })
     if (!error) {
-      // upcoming weeks adopt the new pattern; today's shift is left alone
+      // upcoming weeks adopt the new pattern; today's shift and any shifts
+      // the employee picked up from someone else are left alone
       await supabase.from('shifts').delete()
         .eq('employee_id', selected.id).eq('status', 'scheduled')
+        .is('picked_up_by', null)
         .in('shift_date', futureDatesFor(weekday))
       await supabase.rpc('materialize_shifts', { days_ahead: 14 })
     }
@@ -193,6 +202,7 @@ export default function Employees() {
     if (!error) {
       await supabase.from('shifts').delete()
         .eq('employee_id', selected.id).eq('status', 'scheduled')
+        .is('picked_up_by', null)
         .in('shift_date', futureDatesFor(weekday))
     }
     setBusy(false)
@@ -203,15 +213,16 @@ export default function Employees() {
   // ---------- dropped shifts & pickup approvals ----------
   async function approvePickup(shift) {
     setBusy(true)
-    // the shift transfers to the claimer and returns to the schedule
-    const { error } = await supabase.from('shifts').update({
-      employee_id: shift.picked_up_by,
-      status: 'scheduled',
-      approved: true,
-      dropped_reason: null,
-    }).eq('id', shift.id)
+    // atomic on the server: owner's row becomes a cancelled placeholder
+    // (so the weekly pattern can't re-create their day) and the claimer
+    // gets their own scheduled row
+    const { error } = await supabase.rpc('approve_pickup', { p_shift_id: shift.id })
     setBusy(false)
-    flash(error ? 'Could not approve pickup' : `Shift now belongs to ${shift.claimer?.name ?? 'the claimer'}`)
+    flash(error
+      ? (error.message?.includes('time conflict')
+          ? `${shift.claimer?.name ?? 'The claimer'} now has a conflicting shift that day — deny instead`
+          : 'Could not approve pickup')
+      : `Shift now belongs to ${shift.claimer?.name ?? 'the claimer'}`)
     fetchEmployees()
   }
 
@@ -410,42 +421,56 @@ export default function Employees() {
             </div>
             <div className="list-card">
               {futureDays.map(date => {
-                const shift = shiftFor(selected, date)
-                const editing = shiftDay === date
+                const dayShifts = shiftsFor(selected, date)
+                const visible = dayShifts.filter(s => s.status !== 'cancelled')
+                const addKey = `new-${date}`
+                const shiftEditForm = shift => (
+                  <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div className="fg"><label className="fl">Start</label>
+                        <input type="time" value={shiftForm.start} onChange={e => setShiftForm({ ...shiftForm, start: e.target.value })} /></div>
+                      <div className="fg"><label className="fl">End</label>
+                        <input type="time" value={shiftForm.end} onChange={e => setShiftForm({ ...shiftForm, end: e.target.value })} /></div>
+                    </div>
+                    <button className="btn-teal" disabled={busy} onClick={() => saveShift(date, shift)}>
+                      {busy ? 'Saving…' : 'Save Shift'}
+                    </button>
+                  </div>
+                )
                 return (
                   <div key={date} style={{ borderBottom: '1px solid #e0e0e0' }}>
-                    <div className="list-item" style={{ borderBottom: 'none' }}>
+                    <div className="list-item" style={{ borderBottom: 'none', alignItems: 'flex-start' }}>
                       <div style={{ width: 86, flexShrink: 0, fontSize: 12, fontWeight: date === today ? 600 : 500 }}>{dayLabel(date)}</div>
-                      <div style={{ flex: 1, fontSize: 12, color: shift && shift.status !== 'cancelled' ? '#1a1a1a' : '#6b6b6b' }}>
-                        {shift
-                          ? shift.status === 'cancelled'
-                            ? 'Off (cancelled)'
-                            : `${fmtST(shift.start_time)} – ${fmtST(shift.end_time)} · ${shift.area}`
-                          : 'Off'}
-                        {shift?.status === 'dropped' && <span style={{ color: '#c98a1b' }}> · dropped</span>}
+                      <div style={{ flex: 1 }}>
+                        {visible.length === 0 && (
+                          <div style={{ fontSize: 12, color: '#6b6b6b' }}>
+                            {dayShifts.length > 0 ? 'Off (cancelled)' : 'Off'}
+                          </div>
+                        )}
+                        {visible.map(shift => (
+                          <div key={shift.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 2 }}>
+                            <span style={{ flex: 1 }}>
+                              {fmtST(shift.start_time)} – {fmtST(shift.end_time)} · {shift.area}
+                              {shift.picked_up_by && <span style={{ color: '#2f6e78' }}> · pickup</span>}
+                              {shift.status === 'dropped' && <span style={{ color: '#c98a1b' }}> · dropped</span>}
+                              {shift.status === 'picked_up' && <span style={{ color: '#c98a1b' }}> · claim pending</span>}
+                            </span>
+                            <button className="btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }} disabled={busy}
+                              onClick={() => cancelShift(shift)}>✕</button>
+                            <button className="btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }}
+                              onClick={() => (shiftDay === shift.id ? setShiftDay(null) : startShiftEdit(shift.id, shift))}>
+                              {shiftDay === shift.id ? 'Cancel' : 'Edit'}
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                      {shift && shift.status !== 'cancelled' && (
-                        <button className="btn-secondary" style={{ fontSize: 11, padding: '4px 8px' }} disabled={busy}
-                          onClick={() => cancelShift(shift)}>✕</button>
-                      )}
-                      <button className="btn-secondary" style={{ fontSize: 11, padding: '4px 8px', marginLeft: 6 }}
-                        onClick={() => (editing ? setShiftDay(null) : startShiftEdit(date, shift))}>
-                        {editing ? 'Cancel' : shift ? 'Edit' : 'Add'}
+                      <button className="btn-secondary" style={{ fontSize: 11, padding: '4px 8px', marginLeft: 8 }}
+                        onClick={() => (shiftDay === addKey ? setShiftDay(null) : startShiftEdit(addKey, null))}>
+                        {shiftDay === addKey ? 'Cancel' : visible.length ? '+' : 'Add'}
                       </button>
                     </div>
-                    {editing && (
-                      <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                          <div className="fg"><label className="fl">Start</label>
-                            <input type="time" value={shiftForm.start} onChange={e => setShiftForm({ ...shiftForm, start: e.target.value })} /></div>
-                          <div className="fg"><label className="fl">End</label>
-                            <input type="time" value={shiftForm.end} onChange={e => setShiftForm({ ...shiftForm, end: e.target.value })} /></div>
-                        </div>
-                        <button className="btn-teal" disabled={busy} onClick={() => saveShift(date, shift)}>
-                          {busy ? 'Saving…' : 'Save Shift'}
-                        </button>
-                      </div>
-                    )}
+                    {visible.map(shift => (shiftDay === shift.id ? <div key={`f-${shift.id}`}>{shiftEditForm(shift)}</div> : null))}
+                    {shiftDay === addKey && shiftEditForm(null)}
                   </div>
                 )
               })}

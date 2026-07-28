@@ -1,0 +1,30 @@
+Overhaul shift swap, schedule, and payroll logic
+
+Approving a pickup used to move the shift row to the claimer, leaving
+the owner with no row on that date, so the weekly-pattern materializer
+immediately re-created their shift: both employees ended up scheduled.
+Migration 010 adds an atomic approve_pickup() that turns the owner's
+row into a cancelled placeholder (blocks the materializer, records who
+covers the day) and gives the claimer their own scheduled row, with a
+conflict re-check at approval time.
+
+The shifts protect-trigger is now a real state machine. Staff can only
+drop their own shift, take back an unclaimed drop, claim someone
+else's drop, or withdraw their own claim; times, dates, area, owner,
+and approval are manager-only. The approved flag resets automatically
+on staff transitions, claim races are rejected instead of silently
+overwriting, and the collision check now also counts the claimer's
+other pending claims.
+
+Staff app: Swap screen shows pending drops (with Take Back), pending
+claims (with Withdraw), and drops a coworker claimed, and surfaces
+database errors instead of always reporting success. Schedule shows
+this week and next, every shift on a day, and honest status badges.
+
+Admin: pattern edits no longer delete shifts the employee picked up
+from someone else, the day editor lists every shift on a date, and
+editing a shift no longer silently resets its status. Pay period is
+now 14 days everywhere (staff Pay was 30, admin Payroll 15).
+
+tools/test-swap.mjs covers the full lifecycle (13 checks) including
+the materializer-resurrection regression.

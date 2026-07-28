@@ -18,15 +18,15 @@ export default function Schedule() {
     const dayOfWeek = today.getDay()
     const monday = new Date(today)
     monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-    const sunday = new Date(monday)
-    sunday.setDate(monday.getDate() + 6)
+    const end = new Date(monday)
+    end.setDate(monday.getDate() + 13) // this week + next week
 
     const { data } = await supabase
       .from('shifts')
       .select('*')
       .eq('employee_id', employee.id)
       .gte('shift_date', localDateStr(monday))
-      .lte('shift_date', localDateStr(sunday))
+      .lte('shift_date', localDateStr(end))
       .order('shift_date')
 
     setShifts(data || [])
@@ -50,11 +50,49 @@ export default function Schedule() {
   const monday = new Date(today)
   monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
 
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
+  const weekDays = offset => Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
+    d.setDate(monday.getDate() + offset + i)
     return { date: localDateStr(d), dayLabel: DAY_LABELS[(monday.getDay() + i) % 7], initial: DAY_INITIALS[(monday.getDay() + i) % 7] }
   })
+
+  // status → badge; a day can hold several shifts (own + a pickup)
+  const badgeFor = s =>
+    s.status === 'dropped' ? { cls: 'badge-amber', label: 'Drop pending' }
+    : s.status === 'picked_up' ? { cls: 'badge-amber', label: 'Claim pending' }
+    : { cls: 'badge-blue', label: 'Confirmed' }
+
+  const weekGrid = days => (
+    <div className="list-card">
+      {days.map(day => {
+        const dayShifts = shifts
+          .filter(s => s.shift_date === day.date && s.status !== 'cancelled')
+          .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+        const isToday = day.date === todayStr
+        const dotClass = isToday ? 'today' : dayShifts.length ? 'work' : 'off'
+        return (
+          <div key={day.date} className="shift-row" style={{ background: isToday ? 'rgba(80,162,173,0.06)' : undefined }}>
+            <div className={`day-dot ${dotClass}`}>{day.initial}</div>
+            <div style={{ flex: 1 }}>
+              {dayShifts.length === 0 ? (
+                <span style={{ fontSize: 13, color: '#6b6b6b' }}>Day off</span>
+              ) : dayShifts.map(shift => (
+                <div key={shift.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{shift.start_time} – {shift.end_time}</div>
+                    <div style={{ fontSize: 11, color: '#6b6b6b' }}>{shift.area}</div>
+                  </div>
+                  {isToday && shift.status === 'scheduled'
+                    ? <span className="badge badge-green">Today</span>
+                    : <span className={`badge ${badgeFor(shift).cls}`}>{badgeFor(shift).label}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
 
   return (
     <div className="screen">
@@ -85,32 +123,11 @@ export default function Schedule() {
         </>
       )}
 
-      {/* Week schedule */}
+      {/* Week schedules */}
       <div className="section-label">This week</div>
-      <div className="list-card">
-        {weekDays.map(day => {
-          const shift = shifts.find(s => s.shift_date === day.date && s.status !== 'cancelled')
-          const isToday = day.date === todayStr
-          const dotClass = isToday ? 'today' : shift ? 'work' : 'off'
-          return (
-            <div key={day.date} className="shift-row" style={{ background: isToday ? 'rgba(80,162,173,0.06)' : undefined }}>
-              <div className={`day-dot ${dotClass}`}>{day.initial}</div>
-              <div style={{ flex: 1 }}>
-                {shift ? (
-                  <>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{shift.start_time} – {shift.end_time}</div>
-                    <div style={{ fontSize: 11, color: '#6b6b6b' }}>{shift.area}</div>
-                  </>
-                ) : (
-                  <span style={{ fontSize: 13, color: '#6b6b6b' }}>Day off</span>
-                )}
-              </div>
-              {isToday && <span className="badge badge-green">Today</span>}
-              {!isToday && shift && <span className="badge badge-blue">Confirmed</span>}
-            </div>
-          )
-        })}
-      </div>
+      {weekGrid(weekDays(0))}
+      <div className="section-label">Next week</div>
+      {weekGrid(weekDays(7))}
     </div>
   )
 }

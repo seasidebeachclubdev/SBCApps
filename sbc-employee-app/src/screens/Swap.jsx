@@ -8,7 +8,8 @@ const DROP_REASONS = ['Personal / family', 'Illness', 'Schedule conflict', 'Othe
 export default function Swap() {
   const { employee } = useAuth()
   const [openShifts, setOpenShifts] = useState([])
-  const [myShifts, setMyShifts] = useState([])
+  const [myShifts, setMyShifts] = useState([])   // mine: scheduled / dropped / picked_up
+  const [myClaims, setMyClaims] = useState([])   // other people's shifts I claimed
   const [showDropForm, setShowDropForm] = useState(false)
   const [dropShift, setDropShift] = useState(null)
   const [dropReason, setDropReason] = useState('')
@@ -17,43 +18,64 @@ export default function Swap() {
 
   useEffect(() => { fetchData() }, [])
 
+  function flash(msg) { setToast(msg); setTimeout(() => setToast(''), 4000) }
+
   async function fetchData() {
     const today = localDateStr()
-    // exclude the employee's own dropped shifts - you can't claim your own
-    const { data: open } = await supabase
-      .from('shifts').select('*, employees!employee_id(name, area)')
-      .eq('status', 'dropped').neq('employee_id', employee.id)
-      .gte('shift_date', today).order('shift_date')
+    const [{ data: open }, { data: mine }, { data: claims }] = await Promise.all([
+      supabase.from('shifts').select('*, employees!employee_id(name, area)')
+        .eq('status', 'dropped').neq('employee_id', employee.id)
+        .gte('shift_date', today).order('shift_date'),
+      supabase.from('shifts').select('*')
+        .eq('employee_id', employee.id)
+        .in('status', ['scheduled', 'dropped', 'picked_up'])
+        .gte('shift_date', today).order('shift_date'),
+      supabase.from('shifts').select('*, employees!employee_id(name)')
+        .eq('picked_up_by', employee.id).eq('status', 'picked_up')
+        .gte('shift_date', today).order('shift_date'),
+    ])
     setOpenShifts(open || [])
-
-    const { data: mine } = await supabase
-      .from('shifts').select('*')
-      .eq('employee_id', employee.id)
-      .in('status', ['scheduled', 'picked_up'])
-      .gte('shift_date', today).order('shift_date')
     setMyShifts(mine || [])
+    setMyClaims(claims || [])
   }
+
+  const scheduled = myShifts.filter(s => s.status === 'scheduled')
+  const myDrops = myShifts.filter(s => s.status === 'dropped')
+  const myCovered = myShifts.filter(s => s.status === 'picked_up') // my drop, someone claimed it
 
   async function claimShift(shift) {
     if (shift.employee_id === employee.id) return
-    // no double-booking: the claim must not overlap a shift you already work
-    const conflict = myShifts.find(s =>
+    // no double-booking: not against my schedule, not against claims I
+    // already have pending
+    const conflict = [...scheduled, ...myClaims].find(s =>
       s.shift_date === shift.shift_date &&
       s.start_time < shift.end_time && s.end_time > shift.start_time
     )
     if (conflict) {
-      setToast(`Conflicts with your ${conflict.start_time}–${conflict.end_time} shift that day`)
-      setTimeout(() => setToast(''), 4000)
+      flash(`Conflicts with your ${conflict.start_time}–${conflict.end_time} shift that day`)
       return
     }
     setSaving(true)
-    const { error } = await supabase.from('shifts').update({ status: 'picked_up', picked_up_by: employee.id, approved: false }).eq('id', shift.id)
-    // the database enforces the same rule; surface its message if it fires
-    setToast(error
-      ? (error.message?.includes('time conflict') ? 'Conflicts with a shift you already work that day' : 'Could not claim shift — try again')
+    const { error } = await supabase.from('shifts')
+      .update({ status: 'picked_up', picked_up_by: employee.id })
+      .eq('id', shift.id)
+    // the database enforces the same rules; surface its message if it fires
+    flash(error
+      ? (error.message?.includes('time conflict') ? 'Conflicts with a shift you already work that day'
+        : error.message?.includes('requires a manager') ? 'Someone else just claimed this shift'
+        : 'Could not claim shift — try again')
       : 'Shift claimed — awaiting manager approval')
     fetchData()
-    setTimeout(() => setToast(''), 3000)
+    setSaving(false)
+  }
+
+  async function withdrawClaim(shift) {
+    setSaving(true)
+    const { error } = await supabase.from('shifts')
+      .update({ status: 'dropped', picked_up_by: null })
+      .eq('id', shift.id)
+    flash(error ? 'Could not withdraw — try again' : 'Claim withdrawn — the shift is open again')
+    fetchData()
     setSaving(false)
   }
 
@@ -61,13 +83,26 @@ export default function Swap() {
     e.preventDefault()
     if (!dropReason) return
     setSaving(true)
-    await supabase.from('shifts').update({ status: 'dropped', dropped_reason: dropReason, approved: false }).eq('id', dropShift.id)
+    const { error } = await supabase.from('shifts')
+      .update({ status: 'dropped', dropped_reason: dropReason })
+      .eq('id', dropShift.id)
     setShowDropForm(false)
     setDropShift(null)
     setDropReason('')
-    setToast('Drop request sent — awaiting manager approval')
+    flash(error ? 'Could not drop shift — try again' : 'Shift dropped — coworkers can claim it now')
     fetchData()
-    setTimeout(() => setToast(''), 3000)
+    setSaving(false)
+  }
+
+  async function cancelDrop(shift) {
+    setSaving(true)
+    const { error } = await supabase.from('shifts')
+      .update({ status: 'scheduled', dropped_reason: null })
+      .eq('id', shift.id)
+    flash(error
+      ? (error.message?.includes('requires a manager') ? 'Someone already claimed it — ask a manager' : 'Could not undo — try again')
+      : 'Drop cancelled — the shift is yours again')
+    fetchData()
     setSaving(false)
   }
 
@@ -90,7 +125,7 @@ export default function Swap() {
                   {DROP_REASONS.map(r => <option key={r}>{r}</option>)}
                 </select>
               </div>
-              <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Submitting…' : 'Submit Drop Request'}</button>
+              <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Submitting…' : 'Drop Shift'}</button>
               <button type="button" className="btn-secondary" style={{ textAlign: 'center' }} onClick={() => { setShowDropForm(false); setDropShift(null) }}>Cancel</button>
             </form>
           </div>
@@ -106,7 +141,7 @@ export default function Swap() {
                 <div key={s.id} className="list-item">
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 500 }}>{fmt(s.shift_date)}</div>
-                    <div style={{ fontSize: 11, color: '#6b6b6b' }}>{s.start_time}–{s.end_time} · {s.area}</div>
+                    <div style={{ fontSize: 11, color: '#6b6b6b' }}>{s.start_time}–{s.end_time} · {s.area} · {s.employees?.name}</div>
                   </div>
                   <button className="btn-teal" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => claimShift(s)} disabled={saving}>Claim</button>
                 </div>
@@ -114,12 +149,49 @@ export default function Swap() {
             </div>
           )}
 
+          {(myClaims.length > 0 || myDrops.length > 0 || myCovered.length > 0) && (
+            <>
+              <div className="section-label">Pending requests</div>
+              <div className="list-card">
+                {myClaims.map(s => (
+                  <div key={s.id} className="list-item">
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{fmt(s.shift_date)}</div>
+                      <div style={{ fontSize: 11, color: '#6b6b6b' }}>{s.start_time}–{s.end_time} · {s.area} · {s.employees?.name}'s shift</div>
+                      <span className="badge badge-amber" style={{ marginTop: 4 }}>Claim awaiting approval</span>
+                    </div>
+                    <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => withdrawClaim(s)} disabled={saving}>Withdraw</button>
+                  </div>
+                ))}
+                {myDrops.map(s => (
+                  <div key={s.id} className="list-item">
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{fmt(s.shift_date)}</div>
+                      <div style={{ fontSize: 11, color: '#6b6b6b' }}>{s.start_time}–{s.end_time} · {s.area}</div>
+                      <span className="badge badge-amber" style={{ marginTop: 4 }}>Dropped — open for claims</span>
+                    </div>
+                    <button className="btn-secondary" style={{ fontSize: 12 }} onClick={() => cancelDrop(s)} disabled={saving}>Take Back</button>
+                  </div>
+                ))}
+                {myCovered.map(s => (
+                  <div key={s.id} className="list-item">
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{fmt(s.shift_date)}</div>
+                      <div style={{ fontSize: 11, color: '#6b6b6b' }}>{s.start_time}–{s.end_time} · {s.area}</div>
+                      <span className="badge badge-blue" style={{ marginTop: 4 }}>A coworker claimed it — awaiting manager</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
           <div className="section-label">My upcoming shifts</div>
-          {myShifts.length === 0 ? (
+          {scheduled.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', fontSize: 13, color: '#6b6b6b', padding: 20 }}>No upcoming shifts.</div>
           ) : (
             <div className="list-card">
-              {myShifts.map(s => {
+              {scheduled.map(s => {
                 const isToday = s.shift_date === localDateStr()
                 return (
                   <div key={s.id} className="list-item">
@@ -137,7 +209,7 @@ export default function Swap() {
             </div>
           )}
           <div className="card" style={{ fontSize: 12, color: '#6b6b6b', lineHeight: 1.6 }}>
-            All drop/swap requests require manager approval. You'll be notified by SMS.
+            Claims and drops take effect once a manager approves them.
           </div>
         </>
       )}
