@@ -65,24 +65,25 @@ export default function Gate() {
     setScannerActive(true)
     setCamStatus('starting')
     setCamError('')
-    // ask for the camera synchronously inside the tap gesture; some
-    // browsers refuse permission prompts that come after awaits
-    const warmup = navigator.mediaDevices?.getUserMedia
-      ? navigator.mediaDevices.getUserMedia({ video: { facingMode: mode } })
-      : Promise.reject(Object.assign(new Error('This browser has no camera support'), { name: 'NotFoundError' }))
-    warmup.catch(() => {}) // failure is handled at the await below
     const { Html5Qrcode } = await import('html5-qrcode')
     // the container renders with scannerActive; wait for it to exist
     for (let i = 0; i < 20 && !document.getElementById('qr-reader'); i++)
       await new Promise(r => setTimeout(r, 50))
     try {
-      const stream = await warmup
-      stream.getTracks().forEach(t => t.stop()) // permission secured; html5-qrcode opens its own
-      if (seq !== startSeq.current || !document.getElementById('qr-reader')) return
+      if (seq !== startSeq.current) return
+      if (!document.getElementById('qr-reader')) throw new Error('scanner container missing')
+      if (!navigator.mediaDevices?.getUserMedia)
+        throw Object.assign(new Error('no camera API'), { name: 'NotFoundError' })
+      // exactly one camera stream is opened, by html5-qrcode itself:
+      // opening a second one to pre-check permission can hang iOS Safari
       const scanner = new Html5Qrcode('qr-reader')
       scannerRef.current = scanner
       facingRef.current = mode
-      const config = { fps: 10, qrbox: { width: 250, height: 250 } }
+      const config = {
+        fps: 10,
+        // never larger than the video, or start() throws on narrow screens
+        qrbox: (w, h) => { const s = Math.max(140, Math.floor(Math.min(w, h) * 0.7)); return { width: s, height: s } },
+      }
       const onScan = async (decodedText) => {
         if (scannerRef.current !== scanner) return // already stopping
         await stopScanner()
@@ -90,11 +91,13 @@ export default function Gate() {
       }
       try {
         await scanner.start({ facingMode: mode }, config, onScan, () => {})
-      } catch {
+      } catch (e1) {
+        if (e1?.name === 'NotAllowedError') throw e1
         // some devices reject facingMode constraints; use any camera
         const cams = await Html5Qrcode.getCameras()
         if (!cams?.length) throw Object.assign(new Error('No camera found'), { name: 'NotFoundError' })
-        await scanner.start(cams[0].id, config, onScan, () => {})
+        const cam = cams.find(c => /back|rear|environment/i.test(c.label)) ?? cams[0]
+        await scanner.start(cam.id, config, onScan, () => {})
       }
       if (seq !== startSeq.current) { try { await scanner.stop() } catch {}; return }
       setCamStatus('live')
