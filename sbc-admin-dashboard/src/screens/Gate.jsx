@@ -28,6 +28,7 @@ export default function Gate() {
   const [memberGuests, setMemberGuests] = useState([])
   const [loadingGuests, setLoadingGuests] = useState(false)
   const scannerRef = useRef(null)
+  const patchRef = useRef(null) // keeps the iOS inline-playback fix applied
 
   const today = localDateStr()
 
@@ -70,12 +71,11 @@ export default function Gate() {
     for (let i = 0; i < 20 && !document.getElementById('qr-reader'); i++)
       await new Promise(r => setTimeout(r, 50))
     if (!document.getElementById('qr-reader')) { setScannerActive(false); return }
+    // No qrbox: the whole frame is scannable, which avoids the library's
+    // cropping overlay entirely and is more forgiving to aim at the gate.
     const scanner = new Html5QrcodeScanner('qr-reader', {
       fps: 10,
-      // a fixed box can exceed a 16:9 preview on a narrow screen and refuse to start
-      qrbox: (w, h) => { const s = Math.max(140, Math.floor(Math.min(w, h) * 0.7)); return { width: s, height: s } },
       rememberLastUsedCamera: false,
-      showTorchButtonIfSupported: true,
     }, false)
     scannerRef.current = scanner
     scanner.render(
@@ -85,13 +85,42 @@ export default function Gate() {
       },
       () => {} // per-frame decode misses are normal
     )
+    // iOS renders a black box instead of the camera unless the preview is
+    // explicitly inline and muted. The video element only exists once the
+    // camera starts, so keep applying this while the user gets there.
+    clearInterval(patchRef.current)
+    const started = Date.now()
+    patchRef.current = setInterval(() => {
+      const v = document.querySelector('#qr-reader video')
+      if (v) {
+        v.setAttribute('playsinline', 'true')
+        v.setAttribute('webkit-playsinline', 'true')
+        v.setAttribute('muted', 'true')
+        v.muted = true
+        if (v.paused) v.play().catch(() => {})
+      }
+      if (Date.now() - started > 20000) clearInterval(patchRef.current)
+    }, 300)
   }
 
   async function stopScanner() {
+    clearInterval(patchRef.current)
     const scanner = scannerRef.current
     scannerRef.current = null
     setScannerActive(false)
     if (scanner) { try { await scanner.clear() } catch {} }
+    releaseCamera()
+  }
+
+  // Safety net: if teardown failed part way, a live track keeps the camera
+  // busy and the next scan opens to a black preview until the app is killed.
+  function releaseCamera() {
+    document.querySelectorAll('#qr-reader video').forEach(v => {
+      try {
+        v.srcObject?.getTracks?.().forEach(t => t.stop())
+        v.srcObject = null
+      } catch {}
+    })
   }
 
   async function handleScan(text) {
