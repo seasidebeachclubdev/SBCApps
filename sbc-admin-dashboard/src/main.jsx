@@ -5,6 +5,10 @@ import App from './App'
 import { AuthProvider } from './context/AuthContext'
 import './index.css'
 
+// ask the browser not to evict our storage (keeps the login session);
+// granted automatically for installed PWAs on Android/Chrome
+navigator.storage?.persist?.().catch(() => {})
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>

@@ -24,8 +24,11 @@ export default function Gate() {
   const [recentCheckins, setRecentCheckins] = useState([])
   const [toast, setToast] = useState('')
   const [scannerActive, setScannerActive] = useState(false)
+  const [camStatus, setCamStatus] = useState('idle') // idle | starting | live
+  const [camError, setCamError] = useState('')
   const scannerRef = useRef(null)
   const facingRef = useRef('environment') // back camera first
+  const startSeq = useRef(0) // invalidates an in-flight start when Stop is hit
 
   const today = localDateStr()
 
@@ -58,38 +61,65 @@ export default function Gate() {
   // Direct camera control (no Html5QrcodeScanner widget: it remembers the
   // first camera choice in localStorage and auto-starts with it forever).
   async function startScanner(mode = 'environment') {
+    const seq = ++startSeq.current
     setScannerActive(true)
+    setCamStatus('starting')
+    setCamError('')
+    // ask for the camera synchronously inside the tap gesture; some
+    // browsers refuse permission prompts that come after awaits
+    const warmup = navigator.mediaDevices?.getUserMedia
+      ? navigator.mediaDevices.getUserMedia({ video: { facingMode: mode } })
+      : Promise.reject(Object.assign(new Error('This browser has no camera support'), { name: 'NotFoundError' }))
+    warmup.catch(() => {}) // failure is handled at the await below
     const { Html5Qrcode } = await import('html5-qrcode')
     // the container renders with scannerActive; wait for it to exist
     for (let i = 0; i < 20 && !document.getElementById('qr-reader'); i++)
       await new Promise(r => setTimeout(r, 50))
-    if (!document.getElementById('qr-reader')) { setScannerActive(false); return }
-    const scanner = new Html5Qrcode('qr-reader')
-    scannerRef.current = scanner
-    facingRef.current = mode
     try {
-      await scanner.start(
-        { facingMode: mode },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        async (decodedText) => {
-          if (scannerRef.current !== scanner) return // already stopping
-          await stopScanner()
-          await handleScan(decodedText)
-        },
-        () => {} // per-frame decode misses are normal
-      )
-    } catch {
+      const stream = await warmup
+      stream.getTracks().forEach(t => t.stop()) // permission secured; html5-qrcode opens its own
+      if (seq !== startSeq.current || !document.getElementById('qr-reader')) return
+      const scanner = new Html5Qrcode('qr-reader')
+      scannerRef.current = scanner
+      facingRef.current = mode
+      const config = { fps: 10, qrbox: { width: 250, height: 250 } }
+      const onScan = async (decodedText) => {
+        if (scannerRef.current !== scanner) return // already stopping
+        await stopScanner()
+        await handleScan(decodedText)
+      }
+      try {
+        await scanner.start({ facingMode: mode }, config, onScan, () => {})
+      } catch {
+        // some devices reject facingMode constraints; use any camera
+        const cams = await Html5Qrcode.getCameras()
+        if (!cams?.length) throw Object.assign(new Error('No camera found'), { name: 'NotFoundError' })
+        await scanner.start(cams[0].id, config, onScan, () => {})
+      }
+      if (seq !== startSeq.current) { try { await scanner.stop() } catch {}; return }
+      setCamStatus('live')
+    } catch (e) {
+      if (seq !== startSeq.current) return
       scannerRef.current = null
       setScannerActive(false)
-      setToast('Could not start the camera — check camera permission')
-      setTimeout(() => setToast(''), 4000)
+      setCamStatus('idle')
+      const name = e?.name || ''
+      setCamError(
+        name === 'NotAllowedError'
+          ? 'Camera access is blocked for this site. Allow the camera in your browser settings, then try again.'
+          : name === 'NotFoundError'
+            ? 'No camera was found on this device.'
+            : `Could not start the camera (${name || e?.message || 'unknown error'}).`
+      )
     }
   }
 
   async function stopScanner() {
+    startSeq.current++ // cancel any start still in flight
     const scanner = scannerRef.current
     scannerRef.current = null
     setScannerActive(false)
+    setCamStatus('idle')
     if (scanner) {
       try { await scanner.stop() } catch {}
       try { scanner.clear() } catch {}
@@ -192,6 +222,15 @@ export default function Gate() {
 
       {toast && <div className="success-box">✓ {toast}</div>}
 
+      {camError && (
+        <div className="error-box">
+          <strong>📷 Camera problem</strong><br />
+          {camError}
+          <br /><br />
+          <button className="btn-secondary" onClick={() => setCamError('')}>Dismiss</button>
+        </div>
+      )}
+
       {scanResult ? (
         <div className="card" style={{ textAlign: 'center', border: '1px solid #5dcaa5' }}>
           <div style={{ fontSize: 12, color: '#0f6e56', fontWeight: 500, marginBottom: 8 }}>✓ Verified</div>
@@ -225,6 +264,11 @@ export default function Gate() {
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div id="qr-reader" style={{ width: '100%' }} />
+          {camStatus === 'starting' && (
+            <div style={{ textAlign: 'center', padding: '20px 12px', fontSize: 13, color: '#6b6b6b' }}>
+              Starting camera… allow access if prompted.
+            </div>
+          )}
           <div style={{ padding: 12, display: 'flex', gap: 8 }}>
             <button className="btn-secondary" style={{ flex: 1, textAlign: 'center' }} onClick={flipCamera}>🔄 Flip Camera</button>
             <button className="btn-secondary" style={{ flex: 1, textAlign: 'center' }} onClick={stopScanner}>✕ Stop Camera</button>
