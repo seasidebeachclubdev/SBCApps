@@ -10,6 +10,7 @@ import Fees from './screens/Fees'
 import Events from './screens/Events'
 import Issues from './screens/Issues'
 import Rules from './screens/Rules'
+import Vehicles from './screens/Vehicles'
 import NavBar from './components/NavBar'
 import TopBar from './components/TopBar'
 
@@ -29,6 +30,7 @@ const TITLES = {
   '/events': 'Events & Notices',
   '/issues': 'Issues',
   '/rules':  'Rules & Regs',
+  '/vehicles': 'My Vehicles',
 }
 
 function NoAccount({ message }) {
@@ -60,6 +62,8 @@ function ProtectedLayout() {
         <Route path="/events" element={<Events />} />
         <Route path="/issues" element={<Issues />} />
         <Route path="/rules"  element={<Rules />} />
+        {/* reached from Home rather than the tab bar, which is full */}
+        <Route path="/vehicles" element={<Vehicles />} />
         <Route path="*"       element={<Navigate to="/home" replace />} />
       </Routes>
       <NavBar tabs={NAV_TABS} />

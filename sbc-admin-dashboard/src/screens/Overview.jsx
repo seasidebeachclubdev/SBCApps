@@ -31,8 +31,8 @@ export default function Overview() {
     const { count: checkedIn } = await supabase.from('guests').select('id', { count: 'exact' }).eq('visit_date', today).not('checked_in_by', 'is', null)
     const { data: guestsToday } = await supabase.from('guests').select('id').eq('visit_date', today)
     const { data: fees } = await supabase.from('guests').select('fee, paid')
-    const collected = (fees || []).filter(f => f.paid).reduce((a, f) => a + (f.fee || 35), 0)
-    const outstanding = (fees || []).filter(f => !f.paid).reduce((a, f) => a + (f.fee || 35), 0)
+    const collected = (fees || []).filter(f => f.paid).reduce((a, f) => a + (f.fee || 0), 0)
+    const outstanding = (fees || []).filter(f => !f.paid).reduce((a, f) => a + (f.fee || 0), 0)
     const unpaid = (fees || []).filter(f => !f.paid).length
     setStats({ checkedIn: checkedIn || 0, guests: guestsToday?.length || 0, collected, outstanding })
     setUnpaidCount(unpaid)

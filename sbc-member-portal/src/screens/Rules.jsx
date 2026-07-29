@@ -14,6 +14,8 @@ const RULES = [
     { text: 'Guests must check in immediately at the gate upon arrival — including guests in your vehicle', hi: true },
     { text: 'Failure to check in guests will result in revocation of membership', hi: true },
     { text: 'Same guest: max 4 visits/season across all members' },
+    { text: 'Guest fees: $20 per guest 18 and over, $10 under 18' },
+    { text: 'Guests arriving in their own car also pay a car fee: $50 weekdays, $100 weekends' },
     { text: 'Visitors from adjacent beaches must sign in and pay guest fees' },
     { text: 'Valid photo ID required for all guests' },
   ]},
@@ -34,7 +36,7 @@ const RULES = [
     { text: 'Family: max 2 stickers · Single: 1 sticker' },
     { text: 'Stickers not transferable' },
     { text: 'Park where directed by attendants' },
-    { text: 'Vehicles without a sticker will be charged the standard parking fee' },
+    { text: 'Vehicles without a sticker will be charged the car fee: $50 weekdays, $100 weekends' },
     { text: 'Vehicles without a sticker will be charged $200 to park on July 3–5 and September 5–7', hi: true },
   ]},
   { id: 'membership', title: 'Membership', items: [

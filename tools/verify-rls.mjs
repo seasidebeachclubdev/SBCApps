@@ -53,7 +53,9 @@ const own = await rest('members?select=member_id,onboarded', mTok)
 check('member sees own row', own.body?.length === 1 && own.body[0].member_id === 'SBC-TEST',
   JSON.stringify(own))
 const mFlag = await rest('beach_flag?select=color', mTok)
-check('member sees beach flag', mFlag.body?.[0]?.color === 'green', JSON.stringify(mFlag))
+// any valid colour: staff change the flag daily, so pinning one is brittle
+check('member sees beach flag',
+  ['green', 'yellow', 'red', 'purple'].includes(mFlag.body?.[0]?.color), JSON.stringify(mFlag))
 const mEmp = await rest('employees?select=email', mTok)
 check('member cannot see employees', Array.isArray(mEmp.body) && mEmp.body.length === 0,
   JSON.stringify(mEmp))

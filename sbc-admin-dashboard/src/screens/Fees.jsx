@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { feeBreakdown, GUEST_FEE_TEXT, CAR_FEE_TEXT } from '../lib/fees'
 
 export default function Fees() {
   const [unpaid, setUnpaid] = useState([])
@@ -21,8 +22,8 @@ export default function Fees() {
     setTimeout(() => setToast(''), 3000)
   }
 
-  const unpaidTotal = unpaid.reduce((a, g) => a + (g.fee || 35), 0)
-  const paidTotal = paid.reduce((a, g) => a + (g.fee || 35), 0)
+  const unpaidTotal = unpaid.reduce((a, g) => a + (g.fee || 0), 0)
+  const paidTotal = paid.reduce((a, g) => a + (g.fee || 0), 0)
 
   return (
     <div className="screen">
@@ -30,6 +31,9 @@ export default function Fees() {
       <div className="grid-2">
         <div className="stat-card"><div className="stat-label">Outstanding</div><div className="stat-value" style={{ color: '#d64040', fontSize: 20 }}>${unpaidTotal}</div></div>
         <div className="stat-card"><div className="stat-label">Collected</div><div className="stat-value" style={{ color: '#0f6e56', fontSize: 20 }}>${paidTotal}</div></div>
+      </div>
+      <div className="card" style={{ fontSize: 12, color: '#6b6b6b' }}>
+        {GUEST_FEE_TEXT}. Guest cars {CAR_FEE_TEXT}.
       </div>
       {unpaid.length > 0 && (
         <>
@@ -39,9 +43,14 @@ export default function Fees() {
               <div key={g.id} className="list-item">
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{g.guest_name}</div>
-                  <div style={{ fontSize: 11, color: '#6b6b6b' }}>{g.member_id} · {g.visit_date}</div>
+                  <div style={{ fontSize: 11, color: '#6b6b6b' }}>
+                    {g.member_id} · {g.visit_date} · {feeBreakdown(g)}
+                  </div>
+                  <span className={`badge ${g.paid_by === 'guest' ? 'badge-blue' : 'badge-amber'}`} style={{ marginTop: 3 }}>
+                    {g.paid_by === 'guest' ? 'Guest pays' : 'Member pays'}
+                  </span>
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#d64040', marginRight: 10 }}>${g.fee || 35}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#d64040', marginRight: 10 }}>${g.fee}</span>
                 <button className="btn-secondary" style={{ fontSize: 11, padding: '5px 10px' }} onClick={() => markPaid(g.id)}>Mark paid</button>
               </div>
             ))}

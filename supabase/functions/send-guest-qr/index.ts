@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
   if (!member && !employee) return json({ error: 'unauthorized' }, 401)
 
   const db = adminClient()
-  let query = db.from('guests').select('id, guest_name, email, visit_date, member_id')
+  let query = db.from('guests').select('id, guest_name, email, visit_date, member_id, fee, age_group, own_car, paid_by')
   query = body.guest_id
     ? query.eq('id', body.guest_id)
     : query.eq('member_id', body.member_id).eq('guest_name', body.guest_name)
@@ -59,6 +59,13 @@ Deno.serve(async (req) => {
   if (recipients.length === 0) return json({ error: 'no recipient email on file' }, 400)
 
   const memberName = [owner.first_name, owner.last_name].filter(Boolean).join(' ') || owner.member_id
+  const isWeekend = guest.visit_date
+    ? [0, 6].includes(new Date(`${guest.visit_date}T00:00:00`).getDay())
+    : false
+  const feeParts = [
+    guest.age_group === 'child' ? 'under 18 $10' : '18 and over $20',
+    guest.own_car ? `car ${isWeekend ? '$100 weekend' : '$50 weekday'}` : null,
+  ].filter(Boolean).join(' + ')
 
   const result = await sendEmail({
     to: recipients,
@@ -67,7 +74,8 @@ Deno.serve(async (req) => {
       <p><strong>${esc(guest.guest_name)}</strong> is registered as a guest of <strong>${esc(memberName)}</strong>.</p>
       <table style="font-size:14px;line-height:1.8">
         <tr><td style="color:#6b6b6b;padding-right:14px">Visit date</td><td><strong>${esc(visitDate)}</strong></td></tr>
-        <tr><td style="color:#6b6b6b;padding-right:14px">Guest fee</td><td>$35 - cash or check at the gate</td></tr>
+        <tr><td style="color:#6b6b6b;padding-right:14px">Fee</td><td><strong>$${guest.fee}</strong> (${esc(feeParts)}) - cash or check at the gate</td></tr>
+        <tr><td style="color:#6b6b6b;padding-right:14px">Paid by</td><td>${guest.paid_by === 'guest' ? 'the guest, at the gate' : `${esc(memberName)} (added to their account)`}</td></tr>
       </table>
       <p>The attached QR code must be scanned at the gate on arrival. Guests must check in immediately, including guests arriving in a member's vehicle.</p>
       <p style="font-size:12px;color:#6b6b6b">The same guest may not visit more than 4 times per season across all members.</p>

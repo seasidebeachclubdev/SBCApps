@@ -47,7 +47,7 @@ export default function Reports() {
 
   async function fetchAll() {
     const [guests, members, issues, employees, clocks, shifts, claims] = await Promise.all([
-      supabase.from('guests').select('fee, paid, payment_method, member_id, guest_name, visit_date, checked_in_by'),
+      supabase.from('guests').select('fee, paid, payment_method, member_id, guest_name, visit_date, checked_in_by, paid_by'),
       supabase.from('members').select('member_id, first_name, last_name, membership_type, onboarded, auth_user_id, active'),
       supabase.from('issues').select('status, category, created_at, resolved_at'),
       supabase.from('employees').select('area, active'),
@@ -57,8 +57,8 @@ export default function Reports() {
     ]).then(rs => rs.map(r => r.data || []))
 
     // --- fees
-    const billed = guests.reduce((a, g) => a + (g.fee || 35), 0)
-    const collected = guests.filter(g => g.paid).reduce((a, g) => a + (g.fee || 35), 0)
+    const billed = guests.reduce((a, g) => a + (g.fee || 0), 0)
+    const collected = guests.filter(g => g.paid).reduce((a, g) => a + (g.fee || 0), 0)
 
     // --- guest activity: check-ins by day, last 14 days
     const days = []
@@ -111,7 +111,8 @@ export default function Reports() {
     // --- per-member fee breakdown (only members with guest activity)
     const memberStats = members.map(m => {
       const mg = guests.filter(g => g.member_id === m.member_id)
-      const owed = mg.filter(g => !g.paid).reduce((a, g) => a + (g.fee || 35), 0)
+      // passes the guest settles themselves are not the member's balance
+      const owed = mg.filter(g => !g.paid && g.paid_by !== 'guest').reduce((a, g) => a + (g.fee || 0), 0)
       return { ...m, visits: mg.length, owed }
     })
 

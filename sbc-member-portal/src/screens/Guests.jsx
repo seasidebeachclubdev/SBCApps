@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { FEES, carFeeFor, guestFeeFor, GUEST_FEE_TEXT, CAR_FEE_TEXT } from '../lib/fees'
+
+const EMPTY_FORM = { name: '', email: '', phone: '', date: '', ageGroup: 'adult', ownCar: false, paidBy: 'member' }
 
 export default function Guests() {
   const { member } = useAuth()
   const [guests, setGuests] = useState([])
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', phone: '', date: '' })
+  const [form, setForm] = useState(EMPTY_FORM)
   const [toast, setToast] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -49,6 +52,12 @@ export default function Guests() {
       setSaving(false)
       return
     }
+    // the car fee depends on which day it is, so the date is required for one
+    if (form.ownCar && !form.date) {
+      setError('Pick a visit date so the guest car fee can be worked out (weekday or weekend).')
+      setSaving(false)
+      return
+    }
 
     const { data: newGuest, error: insertError } = await supabase.from('guests').insert({
       member_id: member.member_id,
@@ -57,7 +66,12 @@ export default function Guests() {
       email: form.email,
       phone: form.phone,
       visit_date: form.date || null,
-      fee: 35,
+      age_group: form.ageGroup,
+      own_car: form.ownCar,
+      paid_by: form.paidBy,
+      // the database recomputes this from the schedule; sent so the row is
+      // never briefly wrong if a trigger is ever bypassed
+      fee: guestFeeFor({ age_group: form.ageGroup, own_car: form.ownCar, visit_date: form.date }),
       paid: false,
       payment_method: 'cash',
     }).select('id').single()
@@ -78,13 +92,15 @@ export default function Guests() {
         }
       })
       setShowForm(false)
-      setForm({ name: '', email: '', phone: '', date: '' })
+      setForm(EMPTY_FORM)
       setToast(`QR pass sent to you and ${form.name}`)
       fetchGuests()
       setTimeout(() => setToast(''), 3000)
     }
     setSaving(false)
   }
+
+  const totalFee = guestFeeFor({ age_group: form.ageGroup, own_car: form.ownCar, visit_date: form.date })
 
   return (
     <div className="screen">
@@ -111,11 +127,45 @@ export default function Guests() {
                 <label className="fl">Visit date</label>
                 <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
               </div>
+              <div className="fg">
+                <label className="fl">Guest age</label>
+                <select value={form.ageGroup} onChange={e => setForm({ ...form, ageGroup: e.target.value })}>
+                  <option value="adult">18 and over — ${FEES.adult}</option>
+                  <option value="child">Under 18 — ${FEES.child}</option>
+                </select>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={form.ownCar}
+                  onChange={e => setForm({ ...form, ownCar: e.target.checked })}
+                  style={{ width: 18, height: 18, flexShrink: 0 }}
+                />
+                <span>
+                  Arriving in their own car
+                  <div style={{ fontSize: 11, color: '#6b6b6b' }}>
+                    Car fee {CAR_FEE_TEXT}{form.date ? ` — $${carFeeFor(form.date)} on this date` : ''}
+                  </div>
+                </span>
+              </label>
+              <div className="fg">
+                <label className="fl">Who pays at the gate?</label>
+                <select value={form.paidBy} onChange={e => setForm({ ...form, paidBy: e.target.value })}>
+                  <option value="member">I'll pay — added to my account</option>
+                  <option value="guest">My guest pays at the gate</option>
+                </select>
+              </div>
+              <div className="card" style={{ margin: 0, background: '#f2f2f7', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: '#6b6b6b' }}>
+                  Total {form.paidBy === 'member' ? '(on your account)' : '(guest pays)'}
+                </span>
+                <strong style={{ fontSize: 18 }}>${totalFee}</strong>
+              </div>
               <div className="warn-box" style={{ margin: 0 }}>
                 Guests must check in at the gate immediately upon arrival, including guests in your vehicle. Failure to do so may result in revocation of membership.
               </div>
               <div className="info-box">
-                A QR code will be emailed to you and your guest. The $35 fee is collected by a gate attendant (cash or check). The same guest may not visit more than 4 times per season across all members.
+                A QR code will be emailed to you and your guest. Fees are collected by a gate attendant (cash or check). The same guest may not visit more than 4 times per season across all members.
               </div>
               {error && <div className="error-text" style={{ textAlign: 'left' }}>{error}</div>}
               <button type="submit" className="btn-primary" disabled={saving}>
@@ -132,6 +182,8 @@ export default function Guests() {
           <div className="card">
             <div style={{ fontSize: 13, color: '#6b6b6b', marginBottom: 10, lineHeight: 1.5 }}>
               Invite as many guests as you'd like. The same guest may not visit more than 4 times per season across all members.
+              <br />
+              <strong style={{ color: '#1a1a1a' }}>{GUEST_FEE_TEXT}.</strong> Guest cars {CAR_FEE_TEXT}.
             </div>
             <button className="btn-primary" onClick={() => setShowForm(true)}>+ Invite a Guest</button>
           </div>
@@ -152,6 +204,10 @@ export default function Guests() {
                       <div style={{ fontSize: 14, fontWeight: 500 }}>{g.guest_name}</div>
                       <div style={{ fontSize: 11, color: '#6b6b6b' }}>
                         {g.visit_date ? new Date(g.visit_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Date TBD'}
+                        {' · '}${g.fee}
+                        {g.own_car ? ' · own car' : ''}
+                        {g.age_group === 'child' ? ' · under 18' : ''}
+                        {' · '}{g.paid_by === 'guest' ? 'guest pays' : 'you pay'}
                       </div>
                     </div>
                     <span className={`badge ${g.paid ? 'badge-green' : 'badge-amber'}`}>

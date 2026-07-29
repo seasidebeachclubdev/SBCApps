@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
       html: emailShell('Guest Check-In', `
         <p>Hi ${esc(member.first_name ?? 'there')},</p>
         <p><strong>${esc(body.guest_name)}</strong> just checked in at the gate as your guest.</p>
-        <p style="font-size:12px;color:#6b6b6b">Guest fees are $35 per visit, payable to a gate attendant by cash or check.</p>
+        <p style="font-size:12px;color:#6b6b6b">Guest fees are $20 per guest 18 and over and $10 under 18, plus a car fee of $50 on weekdays or $100 on weekends when the guest arrives in their own vehicle. Payable to a gate attendant by cash or check.</p>
       `),
     })
     if (mail.ok) return json({ ok: true, sent: 'email' })

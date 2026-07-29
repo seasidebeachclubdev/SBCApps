@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { localDateStr } from '../lib/dates'
+import { feeBreakdown } from '../lib/fees'
 
 // QR format: SBCRI|{guest_id}|{guest_name}|{visit_date}|{member_id}
 // Counts via the security-definer RPC so name/email/phone matching follows
@@ -25,6 +26,8 @@ export default function Gate() {
   const [scannerActive, setScannerActive] = useState(false)
   const [member, setMember] = useState(null)      // member opened from search
   const [memberGuests, setMemberGuests] = useState([])
+  const [memberVehicles, setMemberVehicles] = useState([])
+  const [memberHousehold, setMemberHousehold] = useState([])
   const [loadingGuests, setLoadingGuests] = useState(false)
   const scannerRef = useRef(null)
   const patchRef = useRef(null) // keeps the iOS inline-playback fix applied
@@ -157,7 +160,7 @@ export default function Gate() {
   async function verifyGuest(guestId) {
     const { data: guest } = await supabase
       .from('guests')
-      .select('id, guest_name, email, phone, visit_date, member_id, checked_in_by')
+      .select('id, guest_name, email, phone, visit_date, member_id, checked_in_by, fee, paid, age_group, own_car, paid_by')
       .eq('id', guestId)
       .maybeSingle()
     if (!guest) return flash('Pass not found - verify the guest at the desk', 4000)
@@ -179,6 +182,10 @@ export default function Gate() {
       visitDate: guest.visit_date,
       memberId: guest.member_id,
       visitCount,
+      fee: guest.fee,
+      paid: guest.paid,
+      paidBy: guest.paid_by,
+      breakdown: feeBreakdown(guest),
     })
   }
 
@@ -188,19 +195,26 @@ export default function Gate() {
     setSearchResults([])
     setMember(m)
     setLoadingGuests(true)
-    const { data } = await supabase
-      .from('guests')
-      .select('id, guest_name, email, phone, visit_date, fee, paid, checked_in_by, member_id')
-      .eq('member_id', m.member_id)
-      .order('created_at', { ascending: false })
-      .limit(30)
+    const [{ data }, { data: cars }, { data: house }] = await Promise.all([
+      supabase.from('guests')
+        .select('id, guest_name, email, phone, visit_date, fee, paid, checked_in_by, member_id, age_group, own_car, paid_by')
+        .eq('member_id', m.member_id)
+        .order('created_at', { ascending: false })
+        .limit(30),
+      supabase.from('vehicles').select('id, make, model, color, license_plate').eq('member_id', m.member_id),
+      supabase.from('household_members').select('id, full_name').eq('member_id', m.member_id),
+    ])
     setMemberGuests(data || [])
+    setMemberVehicles(cars || [])
+    setMemberHousehold(house || [])
     setLoadingGuests(false)
   }
 
   function closeMember() {
     setMember(null)
     setMemberGuests([])
+    setMemberVehicles([])
+    setMemberHousehold([])
   }
 
   async function admitGuest() {
@@ -257,6 +271,19 @@ export default function Gate() {
             <>
               <div style={{ fontSize: 16, fontWeight: 600 }}>{scanResult.guestName}</div>
               <div style={{ fontSize: 12, color: '#6b6b6b' }}>Guest · Member {scanResult.memberId}</div>
+              <div style={{ marginTop: 8, padding: '8px 10px', background: '#f2f2f7', borderRadius: 8 }}>
+                {scanResult.paid ? (
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#0f6e56' }}>Already paid — collect nothing</div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 18, fontWeight: 700 }}>Collect ${scanResult.fee}</div>
+                    {scanResult.breakdown && <div style={{ fontSize: 11, color: '#6b6b6b' }}>{scanResult.breakdown}</div>}
+                    <div style={{ fontSize: 12, fontWeight: 600, color: scanResult.paidBy === 'guest' ? '#185fa5' : '#854f0b' }}>
+                      {scanResult.paidBy === 'guest' ? 'from the guest' : "on the member's account"}
+                    </div>
+                  </>
+                )}
+              </div>
               {scanResult.visitCount >= 3 && (
                 <div style={{ fontSize: 12, color: '#854f0b', marginTop: 4 }}>⚠️ {scanResult.visitCount} of 4 visits used this season</div>
               )}
@@ -287,6 +314,40 @@ export default function Gate() {
             </button>
           </div>
 
+          <div className="section-label">Vehicles on file</div>
+          {memberVehicles.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', fontSize: 13, color: '#6b6b6b', padding: 16 }}>
+              No vehicles registered.
+            </div>
+          ) : (
+            <div className="list-card">
+              {memberVehicles.map(v => (
+                <div key={v.id} className="list-item">
+                  <span style={{ fontSize: 20 }}>🚗</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: 0.5 }}>{v.license_plate || 'No plate'}</div>
+                    <div style={{ fontSize: 11, color: '#6b6b6b' }}>
+                      {[v.color, v.make, v.model].filter(Boolean).join(' ') || 'No details'}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {memberHousehold.length > 0 && (
+            <>
+              <div className="section-label">Household ({memberHousehold.length})</div>
+              <div className="list-card">
+                {memberHousehold.map(h => (
+                  <div key={h.id} className="list-item">
+                    <div style={{ flex: 1, fontSize: 13 }}>{h.full_name}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
           <div className="section-label">Guest passes</div>
           {loadingGuests ? (
             <div className="card" style={{ textAlign: 'center', fontSize: 13, color: '#6b6b6b', padding: 16 }}>Loading…</div>
@@ -301,9 +362,9 @@ export default function Gate() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 500 }}>{g.guest_name}</div>
                     <div style={{ fontSize: 11, color: '#6b6b6b' }}>
-                      {fmtDate(g.visit_date)} · ${g.fee ?? 35}{' '}
+                      {fmtDate(g.visit_date)} · ${g.fee}{feeBreakdown(g) ? ` (${feeBreakdown(g)})` : ''}{' '}
                       <span className={`badge ${g.paid ? 'badge-green' : 'badge-amber'}`} style={{ marginLeft: 4 }}>
-                        {g.paid ? 'Paid' : 'Unpaid'}
+                        {g.paid ? 'Paid' : g.paid_by === 'guest' ? 'Guest pays' : 'Member pays'}
                       </span>
                     </div>
                   </div>

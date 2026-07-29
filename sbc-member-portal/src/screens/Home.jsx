@@ -1,4 +1,6 @@
+import { FEES } from '../lib/fees'
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import TideCard from '../components/TideCard'
@@ -6,6 +8,7 @@ import FlagBanner from '../components/FlagBanner'
 
 export default function Home() {
   const { member, signOut } = useAuth()
+  const navigate = useNavigate()
   const [unpaidFees, setUnpaidFees] = useState(0)
   const [notices, setNotices] = useState([])
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -28,12 +31,14 @@ export default function Home() {
   }, [])
 
   async function fetchData() {
+    // only what the member agreed to cover counts as their balance
     const { data: guests } = await supabase
       .from('guests')
-      .select('fee, paid')
+      .select('fee, paid, paid_by')
       .eq('member_id', member.member_id)
       .eq('paid', false)
-    setUnpaidFees(guests?.reduce((a, g) => a + (g.fee || 35), 0) || 0)
+      .neq('paid_by', 'guest')
+    setUnpaidFees(guests?.reduce((a, g) => a + (g.fee || 0), 0) || 0)
 
     const { data: noticeData } = await supabase
       .from('notices')
@@ -104,6 +109,19 @@ export default function Home() {
         </>
       )}
 
+      {/* My membership */}
+      <div className="section-label">My membership</div>
+      <div className="list-card">
+        <div className="list-item" style={{ cursor: 'pointer' }} onClick={() => navigate('/vehicles')}>
+          <span style={{ fontSize: 20 }}>🚗</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>My Vehicles</div>
+            <div style={{ fontSize: 11, color: '#6b6b6b' }}>Add or update the cars the gate should recognise</div>
+          </div>
+          <span style={{ fontSize: 12, color: '#6b6b6b' }}>›</span>
+        </div>
+      </div>
+
       {/* Club info */}
       <div className="section-label">Club info</div>
       <div className="card" style={{ fontSize: 13, color: '#6b6b6b', lineHeight: 1.9 }}>
@@ -111,7 +129,8 @@ export default function Home() {
         <div>📞 401-322-0201</div>
         <div>🏊 Lifeguards: 9:30 AM – 5:00 PM daily</div>
         <div>📅 Season: June 20 – Labor Day</div>
-        <div style={{ color: '#1a1a1a' }}>👥 Guests: $35/visit · Same guest max 4/season</div>
+        <div style={{ color: '#1a1a1a' }}>👥 Guests: ${FEES.adult} (18+) · ${FEES.child} (under 18) · max 4 visits/season</div>
+        <div style={{ color: '#1a1a1a' }}>🚗 Guest cars: ${FEES.carWeekday} weekdays · ${FEES.carWeekend} weekends</div>
       </div>
 
       {/* Account */}

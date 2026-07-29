@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { GUEST_FEE_TEXT, CAR_FEE_TEXT } from '../lib/fees'
 
 export default function Fees() {
   const { member } = useAuth()
@@ -20,8 +21,20 @@ export default function Fees() {
     setPaid((data || []).filter(g => g.paid))
   }
 
-  const total = unpaid.reduce((a, g) => a + (g.fee || 35), 0)
-  const paidTotal = paid.reduce((a, g) => a + (g.fee || 35), 0)
+  const fmtDate = d => d
+    ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : 'Date TBD'
+  const detail = g => [
+    g.age_group === 'child' ? 'under 18' : '18+',
+    g.own_car ? 'own car' : null,
+  ].filter(Boolean).join(' · ')
+
+  // only passes the member said they would cover count against their balance
+  const mine = unpaid.filter(g => g.paid_by !== 'guest')
+  const guestPays = unpaid.filter(g => g.paid_by === 'guest')
+  const total = mine.reduce((a, g) => a + (g.fee || 0), 0)
+  const guestTotal = guestPays.reduce((a, g) => a + (g.fee || 0), 0)
+  const paidTotal = paid.reduce((a, g) => a + (g.fee || 0), 0)
 
   return (
     <div className="screen">
@@ -44,17 +57,34 @@ export default function Fees() {
         </div>
       </div>
 
-      {unpaid.length > 0 && (
+      {mine.length > 0 && (
         <>
-          <div className="section-label">Outstanding</div>
+          <div className="section-label">Outstanding — you pay</div>
           <div className="list-card">
-            {unpaid.map(g => (
+            {mine.map(g => (
               <div key={g.id} className="list-item">
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 500 }}>{g.guest_name} — {g.visit_date ? new Date(g.visit_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Date TBD'}</div>
-                  <div style={{ fontSize: 12, color: '#6b6b6b' }}>${g.fee || 35} guest fee</div>
+                  <div style={{ fontSize: 14, fontWeight: 500 }}>{g.guest_name} — {fmtDate(g.visit_date)}</div>
+                  <div style={{ fontSize: 12, color: '#6b6b6b' }}>${g.fee} · {detail(g)}</div>
                 </div>
                 <span className="badge badge-amber">Due</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {guestPays.length > 0 && (
+        <>
+          <div className="section-label">Guest pays at the gate (${guestTotal})</div>
+          <div className="list-card">
+            {guestPays.map(g => (
+              <div key={g.id} className="list-item">
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500 }}>{g.guest_name} — {fmtDate(g.visit_date)}</div>
+                  <div style={{ fontSize: 12, color: '#6b6b6b' }}>${g.fee} · {detail(g)}</div>
+                </div>
+                <span className="badge badge-blue">Guest</span>
               </div>
             ))}
           </div>
@@ -68,8 +98,8 @@ export default function Fees() {
             {paid.map(g => (
               <div key={g.id} className="list-item">
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, color: '#1a1a1a' }}>{g.guest_name} — {g.visit_date ? new Date(g.visit_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Date TBD'}</div>
-                  <div style={{ fontSize: 12, color: '#6b6b6b' }}>${g.fee || 35}</div>
+                  <div style={{ fontSize: 14, color: '#1a1a1a' }}>{g.guest_name} — {fmtDate(g.visit_date)}</div>
+                  <div style={{ fontSize: 12, color: '#6b6b6b' }}>${g.fee}</div>
                 </div>
                 <span className="badge badge-green">Paid</span>
               </div>
@@ -80,7 +110,8 @@ export default function Fees() {
 
       <div className="section-label">Policy</div>
       <div className="card" style={{ fontSize: 13, color: '#6b6b6b', lineHeight: 1.7 }}>
-        $35 per guest visit. Same guest max 4 visits/season across all members.
+        {GUEST_FEE_TEXT}. Guests arriving in their own car also pay a car fee: {CAR_FEE_TEXT}.
+        Same guest max 4 visits/season across all members.
         <br /><br />
         All fees are collected in person by a gate attendant — cash or check only. All outstanding fees must be paid by the Sunday of Labor Day weekend. Late fees will be applied to all balances remaining after that date.
         <br /><br />
