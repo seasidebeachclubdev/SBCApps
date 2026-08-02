@@ -57,7 +57,8 @@ export default function Privacy() {
         You can update your contact details in the portal. You can delete your account (your
         login and contact details) at any time from the portal home screen; core membership
         roster records are retained by the Club as business records. For corrections or
-        questions, contact the Club office.
+        questions, contact the Club office at 401-322-0201 or{' '}
+        <a href="mailto:seasidebeachclub@gmail.com">seasidebeachclub@gmail.com</a>.
       </p>
 
       <h2 style={S.h2}>Children</h2>
@@ -72,6 +73,8 @@ export default function Privacy() {
       <h2 style={S.h2}>Contact</h2>
       <p>
         Seaside Beach Club · 651 Atlantic Ave, Misquamicut, RI 02891 · 401-322-0201
+        <br />
+        <a href="mailto:seasidebeachclub@gmail.com">seasidebeachclub@gmail.com</a>
       </p>
     </div>
   )

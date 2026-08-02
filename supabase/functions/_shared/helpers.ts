@@ -154,6 +154,8 @@ export function emailShell(title: string, inner: string) {
     </div>
     <div style="text-align:center;font-size:11px;color:#9a9aa2;padding:14px">
       Seaside Beach Club · 651 Atlantic Ave, Misquamicut, RI 02891 · 401-322-0201
+      <br />
+      <a href="mailto:seasidebeachclub@gmail.com" style="color:#9a9aa2">seasidebeachclub@gmail.com</a>
     </div>
   </div>
 </body></html>`

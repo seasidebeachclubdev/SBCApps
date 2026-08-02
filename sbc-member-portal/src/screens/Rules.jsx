@@ -40,13 +40,21 @@ const RULES = [
     { text: 'Vehicles without a sticker will be charged $200 to park on July 3–5 and September 5–7', hi: true },
   ]},
   { id: 'membership', title: 'Membership', items: [
-    { text: 'All fees due by May 1 or membership cancelled' },
+    { text: 'Membership bills are sent February 1 and are due March 1' },
+    { text: 'Unpaid after March 1 incurs a late fee; unpaid after April 1 terminates the membership', hi: true },
     { text: 'All outstanding guest fees must be paid by the Sunday of Labor Day weekend — late fees applied to all remaining balances after that date' },
     { text: 'Memberships, cabanas, bathhouses not transferable' },
     { text: 'No sharing cabanas without management approval' },
     { text: "Children's parties after 6 PM require approval" },
     { text: 'Misrepresentation voids membership' },
     { text: 'Management may refuse or dismiss any member or guest' },
+  ]},
+  { id: 'dates', title: 'Important Dates', items: [
+    { text: 'February 1 — membership bills are sent out' },
+    { text: 'March 1 — payment due in full' },
+    { text: 'March 1 – April 1 — a late fee applies to any unpaid balance', hi: true },
+    { text: 'April 1 — memberships still unpaid are terminated', hi: true },
+    { text: 'Sunday of Labor Day weekend — all outstanding guest fees due' },
   ]},
 ]
 
@@ -87,7 +95,8 @@ export default function Rules() {
         )
       })}
       <div className="card" style={{ textAlign: 'center', fontSize: 12, color: '#6b6b6b' }}>
-        Questions? 401-322-0201.
+        Questions? 401-322-0201 ·{' '}
+        <a href="mailto:seasidebeachclub@gmail.com" style={{ color: 'inherit' }}>seasidebeachclub@gmail.com</a>
       </div>
     </div>
   )

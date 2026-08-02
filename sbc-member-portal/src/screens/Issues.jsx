@@ -93,7 +93,7 @@ export default function Issues() {
             </div>
           )}
           <div className="card" style={{ fontSize: 12, color: '#6b6b6b', lineHeight: 1.6 }}>
-            You'll be notified by email when your issue status changes. Urgent: 401-322-0201.
+            You'll be notified by email when your issue status changes. Urgent: 401-322-0201 · seasidebeachclub@gmail.com
           </div>
         </>
       )}

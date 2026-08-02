@@ -126,7 +126,8 @@ export default function Vehicles() {
           ) : (
             <div style={{ fontSize: 13, color: '#6b6b6b', lineHeight: 1.6 }}>
               You have registered all {maxVehicles} vehicle{maxVehicles > 1 ? 's' : ''} your membership allows.
-              Edit or remove one to register a different car, or call the office at 401-322-0201.
+              Edit or remove one to register a different car, or contact the office at
+              401-322-0201 or seasidebeachclub@gmail.com.
             </div>
           )}
         </div>

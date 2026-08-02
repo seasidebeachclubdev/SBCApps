@@ -20,7 +20,7 @@ export default function Home() {
     if (error || !data?.ok) {
       setDeleting(false)
       setConfirmDelete(false)
-      alert('Could not delete your account. Please contact the club office.')
+      alert('Could not delete your account. Please contact the club office at 401-322-0201 or seasidebeachclub@gmail.com.')
       return
     }
     await signOut()
@@ -127,6 +127,7 @@ export default function Home() {
       <div className="card" style={{ fontSize: 13, color: '#6b6b6b', lineHeight: 1.9 }}>
         <div>📍 651 Atlantic Ave, Misquamicut RI 02891</div>
         <div>📞 401-322-0201</div>
+        <div>✉️ <a href="mailto:seasidebeachclub@gmail.com" style={{ color: 'inherit' }}>seasidebeachclub@gmail.com</a></div>
         <div>🏊 Lifeguards: 9:30 AM – 5:00 PM daily</div>
         <div>📅 Season: June 20 – Labor Day</div>
         <div style={{ color: '#1a1a1a' }}>👥 Guests: ${FEES.adult} (18+) · ${FEES.child} (under 18) · max 4 visits/season</div>

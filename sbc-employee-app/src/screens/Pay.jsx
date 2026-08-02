@@ -87,7 +87,7 @@ export default function Pay() {
       )}
 
       <div className="card" style={{ fontSize: 12, color: '#6b6b6b', lineHeight: 1.6 }}>
-        Pay stubs emailed after each pay period. Questions? 401-322-0201.
+        Pay stubs emailed after each pay period. Questions? 401-322-0201 · seasidebeachclub@gmail.com
       </div>
     </div>
   )

@@ -115,7 +115,8 @@ export default function Fees() {
         <br /><br />
         All fees are collected in person by a gate attendant — cash or check only. All outstanding fees must be paid by the Sunday of Labor Day weekend. Late fees will be applied to all balances remaining after that date.
         <br /><br />
-        Questions? Call <strong>401-322-0201</strong>.
+        Questions? Call <strong>401-322-0201</strong> or email{' '}
+        <a href="mailto:seasidebeachclub@gmail.com" style={{ color: 'inherit' }}>seasidebeachclub@gmail.com</a>.
       </div>
     </div>
   )
