@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { localDateStr } from '../lib/dates'
+import Icon from '../components/Icon'
 
 const FLAGS = {
   green:  { color: '#2e9e55', bg: '#eaf7ee', border: '#8dd4a8', text: '#1a5c33', label: 'Green',  desc: 'Safe conditions' },
@@ -72,11 +73,12 @@ export default function Overview() {
     <div className="screen">
       {(openIssues > 0 || unpaidCount > 0 || pendingOnboarding.length > 0) && (
         <div className="alert-box">
-          ⚠️ {[
+          <Icon name="alertTriangle" size={15} style={{ marginTop: 1 }} />
+          <span>{[
             openIssues > 0 && `${openIssues} open issue${openIssues !== 1 ? 's' : ''}`,
             unpaidCount > 0 && `${unpaidCount} unpaid fee${unpaidCount !== 1 ? 's' : ''}`,
             pendingOnboarding.length > 0 && `${pendingOnboarding.length} pending onboarding`,
-          ].filter(Boolean).join(' · ')}
+          ].filter(Boolean).join(' · ')}</span>
         </div>
       )}
 
@@ -103,7 +105,7 @@ export default function Overview() {
         </div>
       </div>
 
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
 
       {/* Stats */}
       <div className="grid-2">

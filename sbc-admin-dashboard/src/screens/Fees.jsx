@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { feeBreakdown, GUEST_FEE_TEXT, CAR_FEE_TEXT } from '../lib/fees'
+import Icon from '../components/Icon'
 
 export default function Fees() {
   const [unpaid, setUnpaid] = useState([])
@@ -27,7 +28,7 @@ export default function Fees() {
 
   return (
     <div className="screen">
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
       <div className="grid-2">
         <div className="stat-card"><div className="stat-label">Outstanding</div><div className="stat-value" style={{ color: '#d64040', fontSize: 20 }}>${unpaidTotal}</div></div>
         <div className="stat-card"><div className="stat-label">Collected</div><div className="stat-value" style={{ color: '#0f6e56', fontSize: 20 }}>${paidTotal}</div></div>

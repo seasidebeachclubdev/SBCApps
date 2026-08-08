@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { localDateStr, roundHours } from '../lib/dates'
+import Icon from '../components/Icon'
 
 const HOURLY_RATE = 16
 
@@ -302,7 +303,7 @@ export default function Employees() {
     )
     return (
       <div className="screen">
-        {toast && <div className="success-box">✓ {toast}</div>}
+        {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button className="btn-secondary" style={{ padding: '6px 10px' }} onClick={() => { setSelectedId(null); setEditDay(null); setShiftDay(null) }}>‹ Back</button>
           <div style={{ flex: 1 }}>
@@ -347,7 +348,7 @@ export default function Employees() {
                           <div key={rec.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 2 }}>
                             <span style={{ flex: 1 }}>
                               {fmtT(rec.clock_in)} – {fmtT(rec.clock_out)}
-                              {rec.override_note && <span title={rec.override_note} style={{ color: '#c98a1b' }}> ✏️</span>}
+                              {rec.override_note && <span title={rec.override_note} style={{ color: '#c98a1b' }}> </span>}
                             </span>
                             <span style={{ fontWeight: 600 }}>{hrs(rec) != null ? `${hrs(rec)}h` : rec.clock_in ? 'open' : ''}</span>
                             <button className="btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }}
@@ -357,7 +358,7 @@ export default function Employees() {
                           </div>
                         ))}
                         {recs.some(r => r.note) && (
-                          <div style={{ fontSize: 11, color: '#2f6e78' }}>📝 {recs.map(r => r.note).filter(Boolean).join(' · ')}</div>
+                          <div style={{ fontSize: 11, color: '#2f6e78' }}>{recs.map(r => r.note).filter(Boolean).join(' · ')}</div>
                         )}
                       </div>
                       <button className="btn-secondary" style={{ fontSize: 11, padding: '4px 8px', marginLeft: 8 }}
@@ -390,7 +391,7 @@ export default function Employees() {
                       </div>
                       {tpl && (
                         <button className="btn-secondary" style={{ fontSize: 11, padding: '4px 8px' }} disabled={busy}
-                          onClick={() => clearPattern(d, tpl)}>✕</button>
+                          onClick={() => clearPattern(d, tpl)}><Icon name="x" size={13} /></button>
                       )}
                       <button className="btn-secondary" style={{ fontSize: 11, padding: '4px 8px', marginLeft: 6 }}
                         onClick={() => (editing ? setPatternDay(null) : startPatternEdit(d, tpl))}>
@@ -456,7 +457,7 @@ export default function Employees() {
                               {shift.status === 'picked_up' && <span style={{ color: '#c98a1b' }}> · claim pending</span>}
                             </span>
                             <button className="btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }} disabled={busy}
-                              onClick={() => cancelShift(shift)}>✕</button>
+                              onClick={() => cancelShift(shift)}><Icon name="x" size={13} /></button>
                             <button className="btn-secondary" style={{ fontSize: 11, padding: '2px 8px' }}
                               onClick={() => (shiftDay === shift.id ? setShiftDay(null) : startShiftEdit(shift.id, shift))}>
                               {shiftDay === shift.id ? 'Cancel' : 'Edit'}
@@ -486,7 +487,7 @@ export default function Employees() {
 
   return (
     <div className="screen">
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
 
       {swaps.length > 0 && (
         <>

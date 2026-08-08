@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import Icon from '../components/Icon'
 
 export default function ResetPassword() {
   const { updatePassword, clearRecovery } = useAuth()
@@ -21,7 +22,7 @@ export default function ResetPassword() {
 
   return (
     <div className="login-wrap">
-      <div className="login-logo">🔑</div>
+      <div className="login-logo"><Icon name="key" size={32} /></div>
       <div className="login-title">Set New Password</div>
       <div style={{ fontSize: 13, color: '#6b6b6b', textAlign: 'center' }}>Choose a new password for your account.</div>
       <form className="login-form" onSubmit={handleSubmit}>

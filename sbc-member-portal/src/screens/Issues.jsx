@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import Icon from '../components/Icon'
 
 const CATEGORIES = ['Maintenance', 'Safety', 'Cabana', 'Bathroom', 'Facility', 'General']
 
@@ -45,7 +46,7 @@ export default function Issues() {
 
   return (
     <div className="screen">
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
       {showForm ? (
         <>
           <div className="section-label">Report an Issue</div>

@@ -5,6 +5,17 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import TideCard from '../components/TideCard'
 import FlagBanner from '../components/FlagBanner'
+import Icon from '../components/Icon'
+
+// one row of the club-info card: icon, then text, aligned on a shared column
+function InfoLine({ icon, strong, children }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: strong ? '#1a1a1a' : undefined }}>
+      <Icon name={icon} size={16} style={{ color: 'var(--teal)' }} />
+      <span>{children}</span>
+    </div>
+  )
+}
 
 export default function Home() {
   const { member, signOut } = useAuth()
@@ -74,13 +85,22 @@ export default function Home() {
       {/* Outstanding fees alert */}
       {unpaidFees > 0 && (
         <div className="alert-box">
-          ⚠️ You have ${unpaidFees} in outstanding guest fees. All outstanding fees must be paid by the Sunday of Labor Day weekend. Late fees will be applied to all balances remaining after that date. See a gate attendant to pay by cash or check.
+          <Icon name="alertTriangle" size={16} style={{ marginTop: 1 }} />
+          <span>
+            You have ${unpaidFees} in outstanding guest fees. All outstanding fees must be paid by the Sunday
+            of Labor Day weekend. Late fees will be applied to all balances remaining after that date.
+            See a gate attendant to pay by cash or check.
+          </span>
         </div>
       )}
 
       {/* Parking warning — always visible */}
       <div className="warn-box">
-        🚗 <strong>Parking notice:</strong> Vehicles without a club sticker will be charged <strong>$200</strong> to park on July 3–5 and September 5–7. Ensure your sticker is properly displayed on those dates.
+        <Icon name="car" size={16} style={{ marginTop: 1 }} />
+        <span>
+          <strong>Parking notice:</strong> Vehicles without a club sticker will be charged <strong>$200</strong>{' '}
+          to park on July 3–5 and September 5–7. Ensure your sticker is properly displayed on those dates.
+        </span>
       </div>
 
       {/* Quick actions */}
@@ -113,7 +133,7 @@ export default function Home() {
       <div className="section-label">My membership</div>
       <div className="list-card">
         <div className="list-item" style={{ cursor: 'pointer' }} onClick={() => navigate('/vehicles')}>
-          <span style={{ fontSize: 20 }}>🚗</span>
+          <Icon name="car" size={20} style={{ color: 'var(--teal)' }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 500 }}>My Vehicles</div>
             <div style={{ fontSize: 11, color: '#6b6b6b' }}>Add or update the cars the gate should recognise</div>
@@ -125,13 +145,13 @@ export default function Home() {
       {/* Club info */}
       <div className="section-label">Club info</div>
       <div className="card" style={{ fontSize: 13, color: '#6b6b6b', lineHeight: 1.9 }}>
-        <div>📍 651 Atlantic Ave, Misquamicut RI 02891</div>
-        <div>📞 401-322-0201</div>
-        <div>✉️ <a href="mailto:seasidebeachclub@gmail.com" style={{ color: 'inherit' }}>seasidebeachclub@gmail.com</a></div>
-        <div>🏊 Lifeguards: 9:30 AM – 5:00 PM daily</div>
-        <div>📅 Season: June 20 – Labor Day</div>
-        <div style={{ color: '#1a1a1a' }}>👥 Guests: ${FEES.adult} (18+) · ${FEES.child} (under 18) · max 4 visits/season</div>
-        <div style={{ color: '#1a1a1a' }}>🚗 Guest cars: ${FEES.carWeekday} weekdays · ${FEES.carWeekend} weekends</div>
+        <InfoLine icon="mapPin">651 Atlantic Ave, Misquamicut RI 02891</InfoLine>
+        <InfoLine icon="phone"><a href="tel:4013220201" style={{ color: 'inherit' }}>401-322-0201</a></InfoLine>
+        <InfoLine icon="mail"><a href="mailto:seasidebeachclub@gmail.com" style={{ color: 'inherit' }}>seasidebeachclub@gmail.com</a></InfoLine>
+        <InfoLine icon="waves">Lifeguards: 9:30 AM – 5:00 PM daily</InfoLine>
+        <InfoLine icon="calendar">Season: June 20 – Labor Day</InfoLine>
+        <InfoLine icon="users" strong>Guests: ${FEES.adult} (18+) · ${FEES.child} (under 18) · max 4 visits/season</InfoLine>
+        <InfoLine icon="car" strong>Guest cars: ${FEES.carWeekday} weekdays · ${FEES.carWeekend} weekends</InfoLine>
       </div>
 
       {/* Account */}

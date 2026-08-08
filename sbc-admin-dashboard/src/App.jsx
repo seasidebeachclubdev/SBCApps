@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
+import Icon from './components/Icon'
 import Login from './screens/Login'
 import ResetPassword from './screens/ResetPassword'
 import Overview from './screens/Overview'
@@ -15,7 +16,7 @@ import Reports from './screens/Reports'
 
 const SCREEN_MAP = { overview: Overview, gate: Gate, members: Members, fees: Fees, employees: Employees, payroll: Payroll, comms: Comms, issues: Issues, reports: Reports }
 const TITLES = { overview: 'Overview', gate: 'Gate Check-In', members: 'Members', fees: 'Fees', employees: 'Employees', payroll: 'Payroll', comms: 'Comms', issues: 'Issues', reports: 'Reports' }
-const ICONS  = { overview: '⌂', gate: '🚪', members: '👥', fees: '💳', employees: '👷', payroll: '💰', comms: '📢', issues: '⚑', reports: '📊' }
+const ICONS  = { overview: 'home', gate: 'scan', members: 'users', fees: 'creditCard', employees: 'briefcase', payroll: 'dollar', comms: 'megaphone', issues: 'flag', reports: 'barChart' }
 
 // Nine sections never fitted a tab bar - it scrolled off the edge - so the
 // admin navigates from a drawer instead.
@@ -53,7 +54,7 @@ function NavDrawer({ tabs, open, onClose }) {
             className={`drawer-item ${current === t ? 'active' : ''}`}
             onClick={() => go(t)}
           >
-            <span className="icon">{ICONS[t]}</span>
+            <Icon name={ICONS[t]} size={19} />
             <span>{TITLES[t]}</span>
           </div>
         ))}
@@ -81,12 +82,16 @@ function TopBar({ onMenu }) {
   const roleLabel = { gate_device: 'Gate Device', ops_manager: 'Ops Manager', business_manager: 'Business Mgr' }[admin?.role] || ''
   return (
     <div className="top-bar" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <button className="hamburger" onClick={onMenu} aria-label="Open menu">☰</button>
+      <button className="hamburger" onClick={onMenu} aria-label="Open menu">
+        <Icon name="menu" size={20} />
+      </button>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="top-bar-sub">{roleLabel} · admin.sbcri.com</div>
         <div className="top-bar-title">{TITLES[tab] || ''}</div>
       </div>
-      <button onClick={signOut} style={signOutStyle}>Sign Out</button>
+      <button className="top-bar-action" onClick={signOut}>
+        <Icon name="logOut" size={15} /> Sign Out
+      </button>
     </div>
   )
 }

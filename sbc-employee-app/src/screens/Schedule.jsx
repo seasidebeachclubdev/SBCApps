@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { localDateStr } from '../lib/dates'
+import Icon from '../components/Icon'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -112,7 +113,7 @@ export default function Schedule() {
         <>
           <div className="section-label">Today's assignment</div>
           <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 28 }}>{assignment.type === 'kitchen' ? '🍳' : '🚧'}</span>
+            <Icon name={assignment.type === 'kitchen' ? 'utensils' : 'cone'} size={26} style={{ color: 'var(--teal)' }} />
             <div>
               <div style={{ fontSize: 15, fontWeight: 600 }}>{assignment.type === 'kitchen' ? assignment.value : assignment.duty}</div>
               <div style={{ fontSize: 12, color: '#6b6b6b' }}>

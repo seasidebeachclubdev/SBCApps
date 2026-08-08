@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import Icon from '../components/Icon'
 
 const linkStyle = { background: 'none', border: 'none', color: '#50a2ad', fontSize: 13, cursor: 'pointer', padding: 4 }
 
@@ -33,7 +34,7 @@ export default function Login() {
   if (view !== 'signin') {
     return (
       <div className="login-wrap">
-        <div className="login-logo">🏊</div>
+        <div className="login-logo"><Icon name="waves" size={32} /></div>
         <div className="login-title">Reset Password</div>
         <div style={{ fontSize: 13, color: '#6b6b6b', textAlign: 'center' }}>staff.sbcri.com · Employees only</div>
         {view === 'sent' ? (
@@ -57,7 +58,7 @@ export default function Login() {
 
   return (
     <div className="login-wrap">
-      <div className="login-logo">🏊</div>
+      <div className="login-logo"><Icon name="waves" size={32} /></div>
       <div className="login-title">SBC Staff App</div>
       <div style={{ fontSize: 13, color: '#6b6b6b', textAlign: 'center' }}>staff.sbcri.com · Employees only</div>
       <form className="login-form" onSubmit={handleSubmit}>

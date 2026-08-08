@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { FEES, carFeeFor, guestFeeFor, GUEST_FEE_TEXT, CAR_FEE_TEXT } from '../lib/fees'
+import Icon from '../components/Icon'
 
 const EMPTY_FORM = { name: '', email: '', phone: '', date: '', ageGroup: 'adult', ownCar: false, paidBy: 'member' }
 
@@ -104,7 +105,7 @@ export default function Guests() {
 
   return (
     <div className="screen">
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
 
       {showForm ? (
         <>

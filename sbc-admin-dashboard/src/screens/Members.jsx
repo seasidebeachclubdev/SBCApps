@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import Icon from '../components/Icon'
 
 function ClaimCard({ claim, memberLabel, onReview, busy }) {
   const [manualId, setManualId] = useState('')
@@ -101,7 +102,7 @@ export default function Members() {
 
   return (
     <div className="screen">
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
 
       {claims.length > 0 && (
         <>

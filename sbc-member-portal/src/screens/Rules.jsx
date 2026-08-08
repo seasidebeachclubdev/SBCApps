@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Icon from '../components/Icon'
 
 const RULES = [
   { id: 'hours', title: 'Facilities & Hours', items: [
@@ -66,7 +67,8 @@ export default function Rules() {
   return (
     <div className="screen">
       <div className="warn-box">
-        ⚠️ All members and guests are responsible for knowing and following these rules.
+        <Icon name="alertTriangle" size={16} style={{ marginTop: 1 }} />
+        <span>All members and guests are responsible for knowing and following these rules.</span>
       </div>
       {RULES.map(sec => {
         const isOpen = !!open[sec.id]

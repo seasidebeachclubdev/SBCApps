@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { localDateStr } from '../lib/dates'
 import { feeBreakdown } from '../lib/fees'
+import Icon from '../components/Icon'
 
 async function checkGuestVisits(guestName, email, phone) {
   const { data: count, error } = await supabase.rpc('guest_visit_count', {
@@ -253,18 +254,18 @@ export default function Gate() {
     <div className="screen">
       {blocked && (
         <div className="error-box">
-          <strong>⛔ Check-in blocked</strong><br />
+          <strong style={{ display: "flex", alignItems: "center", gap: 7 }}><Icon name="ban" size={17} /> Check-in blocked</strong><br />
           <strong>{blocked.name}</strong> {blocked.reason}
           <br /><br />
           <button className="btn-secondary" onClick={() => setBlocked(null)}>Dismiss</button>
         </div>
       )}
 
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
 
       {scanResult ? (
         <div className="card" style={{ textAlign: 'center', border: '1px solid #5dcaa5' }}>
-          <div style={{ fontSize: 12, color: '#0f6e56', fontWeight: 500, marginBottom: 8 }}>✓ Verified</div>
+          <div style={{ fontSize: 12, color: '#0f6e56', fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="checkCircle" size={15} /> Verified</div>
           {scanResult.type === 'guest' ? (
             <>
               <div style={{ fontSize: 16, fontWeight: 600 }}>{scanResult.guestName}</div>
@@ -283,7 +284,7 @@ export default function Gate() {
                 )}
               </div>
               {scanResult.visitCount >= 3 && (
-                <div style={{ fontSize: 12, color: '#854f0b', marginTop: 4 }}>⚠️ {scanResult.visitCount} of 4 visits used this season</div>
+                <div style={{ fontSize: 12, color: '#854f0b', marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Icon name="alertTriangle" size={14} /> {scanResult.visitCount} of 4 visits used this season</div>
               )}
             </>
           ) : (
@@ -321,7 +322,7 @@ export default function Gate() {
             <div className="list-card">
               {memberVehicles.map(v => (
                 <div key={v.id} className="list-item">
-                  <span style={{ fontSize: 20 }}>🚗</span>
+                  <Icon name="car" size={20} style={{ color: 'var(--teal)' }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: 0.5 }}>{v.license_plate || 'No plate'}</div>
                     <div style={{ fontSize: 11, color: '#6b6b6b' }}>
@@ -393,7 +394,7 @@ export default function Gate() {
         </>
       ) : !scannerActive ? (
         <div className="card" style={{ textAlign: 'center', padding: 24 }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>📷</div>
+          <div style={{ marginBottom: 10, display: 'flex', justifyContent: 'center', color: 'var(--teal)' }}><Icon name="camera" size={38} strokeWidth={1.4} /></div>
           <div style={{ fontSize: 13, color: '#6b6b6b', marginBottom: 14 }}>
             Scan a guest pass QR code, or find the member by name below
           </div>
@@ -404,7 +405,7 @@ export default function Gate() {
           <div id="qr-reader" style={{ width: '100%' }} />
           <div style={{ padding: 12 }}>
             <button className="btn-secondary" style={{ width: '100%', textAlign: 'center' }} onClick={stopScanner}>
-              ✕ Close Camera
+              Close Camera
             </button>
           </div>
         </div>

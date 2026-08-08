@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { localDateStr, roundHours } from '../lib/dates'
+import Icon from '../components/Icon'
 
 // Quote a CSV field when it contains commas, quotes, or newlines.
 const csvField = v => {
@@ -50,7 +51,7 @@ export default function Payroll() {
 
   return (
     <div className="screen">
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
       <div className="grid-2">
         <div className="stat-card"><div className="stat-label">Total hours</div><div className="stat-value">{totalHrs.toFixed(1)}</div></div>
         <div className="stat-card"><div className="stat-label">Est. payroll</div><div className="stat-value" style={{ fontSize: 18 }}>${totalPay.toFixed(0)}</div></div>

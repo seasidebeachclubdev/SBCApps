@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { localDateStr, roundHours } from '../lib/dates'
+import Icon from '../components/Icon'
 
 const csvq = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
 
@@ -150,7 +151,7 @@ export default function Reports() {
 
   return (
     <div className="screen">
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
 
       <div className="section-label">Guest fees</div>
       <div className="grid-2">

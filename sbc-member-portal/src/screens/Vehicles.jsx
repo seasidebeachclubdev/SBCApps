@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import Icon from '../components/Icon'
 
 const EMPTY = { make: '', model: '', color: '', license_plate: '' }
 
@@ -77,7 +78,7 @@ export default function Vehicles() {
 
   return (
     <div className="screen">
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
 
       <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button className="btn-secondary" style={{ padding: '6px 10px' }} onClick={() => navigate('/home')}>‹ Back</button>
@@ -101,7 +102,7 @@ export default function Vehicles() {
             <VehicleForm form={form} setForm={setForm} onSubmit={save} onCancel={() => setEditing(null)} saving={saving} error={error} label="Save Changes" />
           ) : (
             <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 26 }}>🚗</span>
+              <Icon name="car" size={24} style={{ color: 'var(--teal)' }} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>{v.license_plate || 'No plate'}</div>
                 <div style={{ fontSize: 12, color: '#6b6b6b' }}>

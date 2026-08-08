@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { localDateStr } from '../lib/dates'
+import Icon from '../components/Icon'
 
 const DROP_REASONS = ['Personal / family', 'Illness', 'Schedule conflict', 'Other']
 
@@ -110,7 +111,7 @@ export default function Swap() {
 
   return (
     <div className="screen">
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
 
       {showDropForm ? (
         <>

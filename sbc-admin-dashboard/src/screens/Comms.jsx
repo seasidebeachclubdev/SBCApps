@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import Icon from '../components/Icon'
 
 export default function Comms() {
   const { admin } = useAuth()
@@ -37,7 +38,7 @@ export default function Comms() {
 
   return (
     <div className="screen">
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
       <div className="section-label">Send to members</div>
       <div className="card">
         <form onSubmit={sendMessage} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

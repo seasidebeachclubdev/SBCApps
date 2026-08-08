@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { localDateStr, roundHours } from '../lib/dates'
+import Icon from '../components/Icon'
 
 export default function Clock() {
   const { employee } = useAuth()
@@ -110,7 +111,7 @@ export default function Clock() {
         </div>
       </div>
 
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
 
       <div className="section-label">Today's log</div>
       <div className="card" style={{ fontSize: 13, color: '#6b6b6b', lineHeight: 1.8 }}>
@@ -144,7 +145,7 @@ export default function Clock() {
               style={{ resize: 'vertical' }}
             />
             <button className="btn-secondary" style={{ textAlign: 'center' }} onClick={saveNote}>
-              {noteSaved ? '✓ Saved' : 'Save Note'}
+              {noteSaved ? 'Saved' : 'Save Note'}
             </button>
           </div>
         </>

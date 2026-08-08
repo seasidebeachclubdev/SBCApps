@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import Icon from '../components/Icon'
 
 const linkStyle = { background: 'none', border: 'none', color: '#50a2ad', fontSize: 13, cursor: 'pointer', padding: 4 }
 
@@ -53,7 +54,7 @@ export default function Login() {
   if (view === 'claim' || view === 'claim-sent') {
     return (
       <div className="login-wrap">
-        <div className="login-logo">🏖️</div>
+        <div className="login-logo"><Icon name="umbrella" size={34} /></div>
         <div className="login-title">Claim Your Account</div>
         <div className="login-sub">Member Portal · members.sbcri.com</div>
         {view === 'claim-sent' ? (
@@ -91,7 +92,7 @@ export default function Login() {
   if (view !== 'signin') {
     return (
       <div className="login-wrap">
-        <div className="login-logo">🏖️</div>
+        <div className="login-logo"><Icon name="umbrella" size={34} /></div>
         <div className="login-title">Reset Password</div>
         <div className="login-sub">Member Portal · members.sbcri.com</div>
         {view === 'sent' ? (
@@ -126,7 +127,7 @@ export default function Login() {
 
   return (
     <div className="login-wrap">
-      <div className="login-logo">🏖️</div>
+      <div className="login-logo"><Icon name="umbrella" size={34} /></div>
       <div className="login-title">Seaside Beach Club</div>
       <div className="login-sub">Member Portal · members.sbcri.com</div>
       <form className="login-form" onSubmit={handleSubmit}>

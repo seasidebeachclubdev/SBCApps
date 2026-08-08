@@ -40,9 +40,10 @@ button { cursor: pointer; font-family: inherit; }
 .badge-red { background: #fcebeb; color: #a32d2d; }
 .badge-gray { background: var(--bg2); color: var(--muted); border: 1px solid var(--border); }
 .badge-purple { background: #f3eaf9; color: #4a1a70; }
-.success-box { background: #d4f0e8; border: 1px solid #5dcaa5; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #085041; text-align: center; margin: 0 16px; }
-.alert-box { background: #faeeda; border: 1px solid #fac775; border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #854f0b; margin: 0 16px; line-height: 1.6; }
-.error-box { background: #fcebeb; border: 1px solid #f09595; border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #a32d2d; margin: 0 16px; line-height: 1.6; }
+/* icon sits in its own column so the text block stays flush */
+.success-box { background: #d4f0e8; border: 1px solid #5dcaa5; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #085041; margin: 0 16px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.alert-box { background: #faeeda; border: 1px solid #fac775; border-radius: 10px; padding: 11px 14px; font-size: 12px; color: #854f0b; margin: 0 16px; line-height: 1.6; display: flex; align-items: flex-start; gap: 9px; }
+.error-box { background: #fcebeb; border: 1px solid #f09595; border-radius: 10px; padding: 11px 14px; font-size: 12px; color: #a32d2d; margin: 0 16px; line-height: 1.6; }
 .avatar { border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; }
 /* no bottom nav here, so the screen itself clears the home indicator */
 .screen { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 14px 0 calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--bg2); }
@@ -67,7 +68,18 @@ button { cursor: pointer; font-family: inherit; }
 }
 .drawer-item.active { background: rgba(80,162,173,0.12); color: var(--teal); font-weight: 600; }
 .drawer-item .icon { font-size: 18px; width: 24px; text-align: center; }
-.top-bar { background: var(--teal); padding: 10px 18px 14px; color: white; flex-shrink: 0; }
+/* The status bar (clock, battery) sits on top of the page in a home-screen
+   app, so the bar has to start below the inset - 14px alone put the controls
+   underneath the clock. */
+.top-bar {
+  background: var(--teal);
+  padding: calc(14px + env(safe-area-inset-top, 0px))
+           calc(18px + env(safe-area-inset-right, 0px))
+           14px
+           calc(18px + env(safe-area-inset-left, 0px));
+  color: white;
+  flex-shrink: 0;
+}
 .top-bar-sub { font-size: 11px; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.05em; }
 .top-bar-title { font-size: 18px; font-weight: 600; }
 .bottom-nav { background: var(--bg); border-top: 1px solid var(--border); display: flex; flex-shrink: 0; padding: 6px 0 10px; overflow-x: auto; }

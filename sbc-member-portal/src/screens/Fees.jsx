@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { GUEST_FEE_TEXT, CAR_FEE_TEXT } from '../lib/fees'
+import Icon from '../components/Icon'
 
 export default function Fees() {
   const { member } = useAuth()
@@ -40,10 +41,15 @@ export default function Fees() {
     <div className="screen">
       {total > 0 ? (
         <div className="alert-box">
-          ⚠️ ${total} outstanding. All fees must be paid by the Sunday of Labor Day weekend. Late fees will be applied to all balances remaining after that date. See a gate attendant to pay by cash or check.
+          <Icon name="alertTriangle" size={16} style={{ marginTop: 1 }} />
+          <span>
+            ${total} outstanding. All fees must be paid by the Sunday of Labor Day weekend. Late fees
+            will be applied to all balances remaining after that date. See a gate attendant to pay by
+            cash or check.
+          </span>
         </div>
       ) : (
-        <div className="success-box">All fees paid — you're good to go! ✓</div>
+        <div className="success-box"><Icon name="checkCircle" size={16} />All fees paid — you're good to go</div>
       )}
 
       <div className="grid-2">

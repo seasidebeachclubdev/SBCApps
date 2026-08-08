@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import Icon from '../components/Icon'
 
 export default function Issues() {
   const [issues, setIssues] = useState([])
@@ -57,7 +58,7 @@ export default function Issues() {
 
   return (
     <div className="screen">
-      {toast && <div className="success-box">✓ {toast}</div>}
+      {toast && <div className="success-box"><Icon name="check" size={15} />{toast}</div>}
       <div className="filter-bar">
         {['all', 'Open', 'In Progress', 'Resolved'].map(f => (
           <button key={f} className={`filter-btn ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
