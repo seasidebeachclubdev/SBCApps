@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Login from './screens/Login'
 import ResetPassword from './screens/ResetPassword'
@@ -16,18 +17,48 @@ const SCREEN_MAP = { overview: Overview, gate: Gate, members: Members, fees: Fee
 const TITLES = { overview: 'Overview', gate: 'Gate Check-In', members: 'Members', fees: 'Fees', employees: 'Employees', payroll: 'Payroll', comms: 'Comms', issues: 'Issues', reports: 'Reports' }
 const ICONS  = { overview: '⌂', gate: '🚪', members: '👥', fees: '💳', employees: '👷', payroll: '💰', comms: '📢', issues: '⚑', reports: '📊' }
 
-function NavBar({ tabs }) {
+// Nine sections never fitted a tab bar - it scrolled off the edge - so the
+// admin navigates from a drawer instead.
+function NavDrawer({ tabs, open, onClose }) {
   const location = useLocation()
-  const tab = location.pathname.slice(1)
+  const navigate = useNavigate()
+  const current = location.pathname.slice(1)
+
+  // Escape closes it, same as tapping away
+  useEffect(() => {
+    if (!open) return
+    const onKey = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  function go(t) {
+    navigate(`/${t}`)   // client-side: the old bar reloaded the whole app
+    onClose()
+  }
+
   return (
-    <div className="bottom-nav" style={{ overflowX: 'auto' }}>
-      {tabs.map(t => (
-        <div key={t} className={`nav-item ${tab === t ? 'active' : ''}`} style={{ minWidth: 52 }} onClick={() => window.location.href = `/${t}`}>
-          <span className="icon">{ICONS[t]}</span>
-          <span className="label">{TITLES[t]}</span>
+    <>
+      {open && <div className="nav-backdrop" onClick={onClose} />}
+      <nav className={`nav-drawer ${open ? 'open' : ''}`} aria-hidden={!open}>
+        <div className="drawer-head">
+          <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Seaside Beach Club
+          </div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--teal)' }}>Admin</div>
         </div>
-      ))}
-    </div>
+        {tabs.map(t => (
+          <div
+            key={t}
+            className={`drawer-item ${current === t ? 'active' : ''}`}
+            onClick={() => go(t)}
+          >
+            <span className="icon">{ICONS[t]}</span>
+            <span>{TITLES[t]}</span>
+          </div>
+        ))}
+      </nav>
+    </>
   )
 }
 
@@ -43,14 +74,15 @@ const signOutStyle = {
   flexShrink: 0,
 }
 
-function TopBar({ tabs }) {
+function TopBar({ onMenu }) {
   const { admin, signOut } = useAuth()
   const location = useLocation()
   const tab = location.pathname.slice(1)
   const roleLabel = { gate_device: 'Gate Device', ops_manager: 'Ops Manager', business_manager: 'Business Mgr' }[admin?.role] || ''
   return (
-    <div className="top-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-      <div>
+    <div className="top-bar" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <button className="hamburger" onClick={onMenu} aria-label="Open menu">☰</button>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div className="top-bar-sub">{roleLabel} · admin.sbcri.com</div>
         <div className="top-bar-title">{TITLES[tab] || ''}</div>
       </div>
@@ -71,9 +103,11 @@ function NoAccount({ message }) {
 }
 
 function ProtectedLayout({ tabs }) {
+  const [menuOpen, setMenuOpen] = useState(false)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <TopBar tabs={tabs} />
+      <TopBar onMenu={() => setMenuOpen(true)} />
+      <NavDrawer tabs={tabs} open={menuOpen} onClose={() => setMenuOpen(false)} />
       <Routes>
         {tabs.map(t => {
           const Comp = SCREEN_MAP[t]
@@ -81,7 +115,6 @@ function ProtectedLayout({ tabs }) {
         })}
         <Route path="*" element={<Navigate to={`/${tabs[0]}`} replace />} />
       </Routes>
-      <NavBar tabs={tabs} />
     </div>
   )
 }

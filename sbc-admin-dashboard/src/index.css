@@ -44,7 +44,29 @@ button { cursor: pointer; font-family: inherit; }
 .alert-box { background: #faeeda; border: 1px solid #fac775; border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #854f0b; margin: 0 16px; line-height: 1.6; }
 .error-box { background: #fcebeb; border: 1px solid #f09595; border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #a32d2d; margin: 0 16px; line-height: 1.6; }
 .avatar { border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; }
-.screen { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 14px 0 20px; background: var(--bg2); }
+/* no bottom nav here, so the screen itself clears the home indicator */
+.screen { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 14px 0 calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--bg2); }
+
+/* Slide-out navigation: nine sections never fitted across a tab bar */
+.hamburger {
+  background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.4); color: #fff;
+  border-radius: 8px; padding: 7px 11px; font-size: 17px; line-height: 1; cursor: pointer; flex-shrink: 0;
+}
+.nav-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 40; }
+.nav-drawer {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 268px; max-width: 82vw; z-index: 50;
+  background: var(--bg); box-shadow: 2px 0 20px rgba(0,0,0,0.18); overflow-y: auto;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  transform: translateX(-100%); transition: transform 0.18s ease-out;
+}
+.nav-drawer.open { transform: translateX(0); }
+.drawer-head { padding: 18px 18px 12px; border-bottom: 1px solid var(--border); }
+.drawer-item {
+  display: flex; align-items: center; gap: 13px; padding: 14px 18px;
+  font-size: 15px; cursor: pointer; border-bottom: 1px solid var(--border);
+}
+.drawer-item.active { background: rgba(80,162,173,0.12); color: var(--teal); font-weight: 600; }
+.drawer-item .icon { font-size: 18px; width: 24px; text-align: center; }
 .top-bar { background: var(--teal); padding: 10px 18px 14px; color: white; flex-shrink: 0; }
 .top-bar-sub { font-size: 11px; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.05em; }
 .top-bar-title { font-size: 18px; font-weight: 600; }
