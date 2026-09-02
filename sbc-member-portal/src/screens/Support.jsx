@@ -78,7 +78,8 @@ export default function Support() {
       <p>
         You can update your contact details in the app, and you can delete your account at any time
         from the Home screen. Deleting removes your login and contact details; the club retains core
-        membership roster records as business records. See our{' '}
+        membership roster records as business records. See{' '}
+        <a style={S.a} href="/delete-account">how to delete your account</a> and our{' '}
         <a style={S.a} href="/privacy">Privacy Policy</a>.
       </p>
 

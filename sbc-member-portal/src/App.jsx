@@ -7,6 +7,7 @@ import ResetPassword from './screens/ResetPassword'
 import Onboarding from './screens/Onboarding'
 import Privacy from './screens/Privacy'
 import Support from './screens/Support'
+import DeleteAccount from './screens/DeleteAccount'
 import Home from './screens/Home'
 import Guests from './screens/Guests'
 import Fees from './screens/Fees'
@@ -128,6 +129,7 @@ export default function App() {
   // public pages - required by the app stores, no login needed
   if (location.pathname === '/privacy') return <Privacy />
   if (location.pathname === '/support') return <Support />
+  if (location.pathname === '/delete-account') return <DeleteAccount />
 
   if (loading) {
     return (
