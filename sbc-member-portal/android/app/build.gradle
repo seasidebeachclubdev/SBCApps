@@ -12,7 +12,10 @@ android {
     namespace "com.sbcri.member"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.sbcri.member"
+        // Play Store listing is registered under this package name (permanent).
+        // The code namespace stays com.sbcri.member; Android allows the
+        // installed applicationId to differ. iOS keeps com.sbcri.member.
+        applicationId "com.sbcmembers.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
